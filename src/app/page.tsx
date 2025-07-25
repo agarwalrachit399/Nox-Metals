@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useMemo, useEffect } from 'react'
-import { Search, SortAsc, SortDesc, Filter, ChevronLeft, ChevronRight, Plus, Edit, Trash2, Loader2, RefreshCw } from 'lucide-react'
+import { Search, SortAsc, SortDesc, Filter, ChevronLeft, ChevronRight, Plus, Edit, Trash2, Loader2, RefreshCw, Eye, Shield, AlertTriangle } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,7 @@ import { type LegacyProduct, transformProductFromDB } from '@/lib/dummy-data'
 import ProductForm from '@/components/product-form'
 import AuthGuard from '@/components/auth-guard'
 import Navbar from '@/components/navbar'
+import { useAuth } from '@/components/auth-provider'
 
 type Product = LegacyProduct
 type SortOption = 'name-asc' | 'name-desc' | 'price-asc' | 'price-desc' | 'createdAt-desc'
@@ -34,6 +35,9 @@ export default function HomePage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isLoadingCategories, setIsLoadingCategories] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  
+  // Get user role for access control
+  const { isAdmin, role, loading: authLoading } = useAuth()
 
   // State for search/filter/sort
   const [searchTerm, setSearchTerm] = useState('')
@@ -55,6 +59,11 @@ export default function HomePage() {
 
   // Fetch categories from API
   const fetchCategories = async () => {
+    // Don't fetch if user is not authenticated
+    if (authLoading || !role) {
+      return
+    }
+
     try {
       setIsLoadingCategories(true)
       const response = await fetch('/api/categories')
@@ -62,6 +71,9 @@ export default function HomePage() {
       if (response.ok) {
         const categoriesData = await response.json()
         setCategories(['all', ...categoriesData.map((cat: any) => cat.name)])
+      } else if (response.status === 401 || response.status === 403) {
+        // Don't set error during sign out process - just use fallback
+        setCategories(['all', 'Electronics', 'Clothing', 'Health', 'Furniture', 'Home', 'Accessories'])
       } else {
         console.error('Failed to fetch categories')
         // Fallback to default categories
@@ -83,6 +95,11 @@ export default function HomePage() {
 
   // Fetch products from API
   const fetchProducts = async () => {
+    // Don't fetch if user is not authenticated
+    if (authLoading || !role) {
+      return
+    }
+
     try {
       setIsLoading(true)
       setError(null)
@@ -99,7 +116,15 @@ export default function HomePage() {
       const response = await fetch(`/api/products?${searchParams}`)
       
       if (!response.ok) {
-        throw new Error('Failed to fetch products')
+        if (response.status === 401) {
+          // Don't set error during sign out - just return
+          return
+        } else if (response.status === 403) {
+          setError('Access denied. You do not have permission to view products.')
+        } else {
+          throw new Error('Failed to fetch products')
+        }
+        return
       }
 
       const data: ApiResponse = await response.json()
@@ -110,7 +135,10 @@ export default function HomePage() {
       setTotalProducts(data.pagination.total)
     } catch (error) {
       console.error('Error fetching products:', error)
-      setError('Failed to load products. Please try again.')
+      // Don't set error if it's likely due to sign out
+      if (role) {
+        setError('Failed to load products. Please try again.')
+      }
     } finally {
       setIsLoading(false)
     }
@@ -118,13 +146,17 @@ export default function HomePage() {
 
   // Fetch initial data
   useEffect(() => {
-    fetchCategories()
-  }, [])
+    if (!authLoading && role) {
+      fetchCategories()
+    }
+  }, [authLoading, role])
 
   // Fetch products on component mount and when dependencies change
   useEffect(() => {
-    fetchProducts()
-  }, [currentPage, searchTerm, filterCategory, sortBy, showDeleted])
+    if (!authLoading && role) {
+      fetchProducts()
+    }
+  }, [currentPage, searchTerm, filterCategory, sortBy, showDeleted, authLoading, role])
 
   // Reset to first page when filters change
   useEffect(() => {
@@ -142,27 +174,39 @@ export default function HomePage() {
     setCurrentPage(prev => Math.min(prev + 1, totalPages))
   }
 
-  // Handle product creation
+  // Handle product creation (Admin only)
   const handleCreateProduct = () => {
+    if (!isAdmin) {
+      setError('Only administrators can create products.')
+      return
+    }
     setFormMode('create')
     setSelectedProduct(null)
     setIsFormOpen(true)
   }
 
-  // Handle product editing
+  // Handle product editing (Admin only)
   const handleEditProduct = (product: Product) => {
+    if (!isAdmin) {
+      setError('Only administrators can edit products.')
+      return
+    }
     setFormMode('edit')
     setSelectedProduct(product)
     setIsFormOpen(true)
   }
 
-  // Handle product deletion
+  // Handle product deletion (Admin only)
   const handleDeleteProduct = (product: Product) => {
+    if (!isAdmin) {
+      setError('Only administrators can delete products.')
+      return
+    }
     setProductToDelete(product)
   }
 
   const confirmDelete = async () => {
-    if (!productToDelete) return
+    if (!productToDelete || !isAdmin) return
 
     setIsDeleting(true)
     try {
@@ -171,7 +215,14 @@ export default function HomePage() {
       })
 
       if (!response.ok) {
-        throw new Error('Failed to delete product')
+        if (response.status === 401) {
+          setError('Authentication required. Please log in again.')
+        } else if (response.status === 403) {
+          setError('Access denied. Only administrators can delete products.')
+        } else {
+          throw new Error('Failed to delete product')
+        }
+        return
       }
 
       // Refresh products list
@@ -197,6 +248,7 @@ export default function HomePage() {
           <Navbar />
           <div className="container mx-auto px-4 py-8">
             <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
               <AlertDescription className="flex items-center justify-between">
                 {error}
                 <Button variant="outline" size="sm" onClick={fetchProducts}>
@@ -216,290 +268,317 @@ export default function HomePage() {
       <div className="min-h-screen bg-gray-50">
         <Navbar />
         <div className="container mx-auto px-4 py-8">
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-2">
-          <h1 className="text-4xl font-bold">Product Catalog</h1>
-          <Button onClick={handleCreateProduct} className="flex items-center gap-2">
-            <Plus className="h-4 w-4" />
-            Add Product
-          </Button>
-        </div>
-        <p className="text-muted-foreground">Discover our amazing collection of products</p>
-      </div>
-
-      {/* Search and Filter Controls */}
-      <div className="mb-6 space-y-4">
-        <div className="flex flex-col sm:flex-row gap-4">
-          {/* Search */}
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-            <Input
-              placeholder="Search products..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-
-          {/* Sort */}
-          <Select value={sortBy} onValueChange={(value: SortOption) => setSortBy(value)}>
-            <SelectTrigger className="w-full sm:w-[200px]">
-              <SelectValue placeholder="Sort by" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="name-asc">
-                <div className="flex items-center gap-2">
-                  <SortAsc className="h-4 w-4" />
-                  Name A-Z
-                </div>
-              </SelectItem>
-              <SelectItem value="name-desc">
-                <div className="flex items-center gap-2">
-                  <SortDesc className="h-4 w-4" />
-                  Name Z-A
-                </div>
-              </SelectItem>
-              <SelectItem value="price-asc">
-                <div className="flex items-center gap-2">
-                  <SortAsc className="h-4 w-4" />
-                  Price Low-High
-                </div>
-              </SelectItem>
-              <SelectItem value="price-desc">
-                <div className="flex items-center gap-2">
-                  <SortDesc className="h-4 w-4" />
-                  Price High-Low
-                </div>
-              </SelectItem>
-              <SelectItem value="createdAt-desc">
-                <div className="flex items-center gap-2">
-                  <SortDesc className="h-4 w-4" />
-                  Newest First
-                </div>
-              </SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* Category Filter */}
-          <Select value={filterCategory} onValueChange={setFilterCategory}>
-            <SelectTrigger className="w-full sm:w-[200px]">
-              <SelectValue placeholder="Filter by category" />
-            </SelectTrigger>
-            <SelectContent>
-              {filterCategories.map(category => (
-                <SelectItem key={category} value={category}>
-                  <div className="flex items-center gap-2">
-                    <Filter className="h-4 w-4" />
-                    {category === 'all' ? 'All Categories' : category}
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Show Deleted Toggle and Results Count */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Button
-              variant={showDeleted ? "default" : "outline"}
-              size="sm"
-              onClick={() => setShowDeleted(!showDeleted)}
-            >
-              {showDeleted ? "Show Active Products" : "Show Deleted Products"}
-            </Button>
-            <span className="text-sm text-muted-foreground">
-              {isLoading ? 'Loading...' : `Showing ${totalProducts} products`}
-            </span>
-          </div>
-          
-          {!isLoading && (
-            <Button variant="ghost" size="sm" onClick={fetchProducts}>
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Refresh
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Loading State */}
-      {isLoading && (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin" />
-          <span className="ml-2 text-muted-foreground">Loading products...</span>
-        </div>
-      )}
-
-      {/* Products Grid */}
-      {!isLoading && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          {products.map((product) => (
-            <Card key={product.id} className="flex flex-col">
-              <CardHeader className="pb-3">
-                <div className="aspect-video w-full bg-muted rounded-md mb-3 overflow-hidden">
-                  <img
-                    src={product.image ?? ''}
-                    alt={product.name}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <div className="flex items-start justify-between">
-                  <CardTitle className="text-lg line-clamp-2">{product.name}</CardTitle>
-                  <Badge variant="secondary" className="ml-2 shrink-0">
-                    {product.category}
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-3">
+                <h1 className="text-4xl font-bold">Product Catalog</h1>
+                {role && (
+                  <Badge variant={isAdmin ? "default" : "secondary"} className="flex items-center gap-1">
+                    {isAdmin ? <Shield className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                    {isAdmin ? 'Full Access' : 'View Only'}
                   </Badge>
-                </div>
-                <CardDescription className="line-clamp-2">
-                  {product.description}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="pb-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-2xl font-bold text-primary">
-                    ${product.price.toFixed(2)}
-                  </span>
-                  {product.isDeleted && (
-                    <Badge variant="destructive">Deleted</Badge>
-                  )}
-                </div>
-              </CardContent>
-              <CardFooter className="pt-0 mt-auto">
-                <div className="flex gap-2 w-full">
-                  {!product.isDeleted ? (
-                    <>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEditProduct(product)}
-                        className="flex items-center gap-1"
-                      >
-                        <Edit className="h-3 w-3" />
-                        Edit
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDeleteProduct(product)}
-                        className="flex items-center gap-1 text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                        Delete
-                      </Button>
-                      <Button className="flex-1">Add to Cart</Button>
-                    </>
-                  ) : (
-                    <Button variant="secondary" className="w-full" disabled>
-                      Unavailable
-                    </Button>
-                  )}
-                </div>
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {/* Empty State */}
-      {!isLoading && products.length === 0 && (
-        <div className="text-center py-12">
-          <div className="text-muted-foreground mb-4">
-            <Search className="h-12 w-12 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No products found</h3>
-            <p className="mb-4">
-              {searchTerm || filterCategory !== 'all'
-                ? 'Try adjusting your search or filter criteria'
-                : 'Get started by adding your first product'
+                )}
+              </div>
+              {isAdmin && (
+                <Button onClick={handleCreateProduct} className="flex items-center gap-2">
+                  <Plus className="h-4 w-4" />
+                  Add Product
+                </Button>
+              )}
+            </div>
+            <p className="text-muted-foreground">
+              {isAdmin 
+                ? 'Manage your product catalog with full administrative access'
+                : 'Browse our product catalog'
               }
             </p>
-            {!searchTerm && filterCategory === 'all' && (
-              <Button onClick={handleCreateProduct} className="flex items-center gap-2 mx-auto">
-                <Plus className="h-4 w-4" />
-                Add Your First Product
-              </Button>
-            )}
           </div>
-        </div>
-      )}
 
-      {/* Pagination */}
-      {!isLoading && totalPages > 1 && (
-        <div className="flex items-center justify-center gap-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handlePrevPage}
-            disabled={currentPage === 1}
-          >
-            <ChevronLeft className="h-4 w-4 mr-1" />
-            Previous
-          </Button>
-          
-          <div className="flex items-center gap-2">
-            {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-              const page = i + 1
-              if (totalPages <= 5) {
-                return page
-              }
-              // Show first, last, current, and adjacent pages
-              if (currentPage <= 3) return page
-              if (currentPage >= totalPages - 2) return totalPages - 4 + i
-              return currentPage - 2 + i
-            }).map((page) => (
+          {/* Search and Filter Controls */}
+          <div className="mb-6 space-y-4">
+            <div className="flex flex-col sm:flex-row gap-4">
+              {/* Search */}
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                  placeholder="Search products..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+
+              {/* Sort */}
+              <Select value={sortBy} onValueChange={(value: SortOption) => setSortBy(value)}>
+                <SelectTrigger className="w-full sm:w-[200px]">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="name-asc">
+                    <div className="flex items-center gap-2">
+                      <SortAsc className="h-4 w-4" />
+                      Name A-Z
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="name-desc">
+                    <div className="flex items-center gap-2">
+                      <SortDesc className="h-4 w-4" />
+                      Name Z-A
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="price-asc">
+                    <div className="flex items-center gap-2">
+                      <SortAsc className="h-4 w-4" />
+                      Price Low-High
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="price-desc">
+                    <div className="flex items-center gap-2">
+                      <SortDesc className="h-4 w-4" />
+                      Price High-Low
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="createdAt-desc">
+                    <div className="flex items-center gap-2">
+                      <SortDesc className="h-4 w-4" />
+                      Newest First
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* Category Filter */}
+              <Select value={filterCategory} onValueChange={setFilterCategory}>
+                <SelectTrigger className="w-full sm:w-[200px]">
+                  <SelectValue placeholder="Filter by category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {filterCategories.map(category => (
+                    <SelectItem key={category} value={category}>
+                      <div className="flex items-center gap-2">
+                        <Filter className="h-4 w-4" />
+                        {category === 'all' ? 'All Categories' : category}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Show Deleted Toggle and Results Count */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {isAdmin && (
+                  <Button
+                    variant={showDeleted ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setShowDeleted(!showDeleted)}
+                  >
+                    {showDeleted ? "Show Active Products" : "Show Deleted Products"}
+                  </Button>
+                )}
+                <span className="text-sm text-muted-foreground">
+                  {isLoading ? 'Loading...' : `Showing ${totalProducts} products`}
+                </span>
+              </div>
+              
+              {!isLoading && (
+                <Button variant="ghost" size="sm" onClick={fetchProducts}>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Refresh
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Loading State */}
+          {isLoading && (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin" />
+              <span className="ml-2 text-muted-foreground">Loading products...</span>
+            </div>
+          )}
+
+          {/* Products Grid */}
+          {!isLoading && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+              {products.map((product) => (
+                <Card key={product.id} className="flex flex-col">
+                  <CardHeader className="pb-3">
+                    <div className="aspect-video w-full bg-muted rounded-md mb-3 overflow-hidden">
+                      <img
+                        src={product.image ?? ''}
+                        alt={product.name}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <div className="flex items-start justify-between">
+                      <CardTitle className="text-lg line-clamp-2">{product.name}</CardTitle>
+                      <Badge variant="secondary" className="ml-2 shrink-0">
+                        {product.category}
+                      </Badge>
+                    </div>
+                    <CardDescription className="line-clamp-2">
+                      {product.description}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-2xl font-bold text-primary">
+                        ${product.price.toFixed(2)}
+                      </span>
+                      {product.isDeleted && (
+                        <Badge variant="destructive">Deleted</Badge>
+                      )}
+                    </div>
+                  </CardContent>
+                  <CardFooter className="pt-0 mt-auto">
+                    <div className="flex gap-2 w-full">
+                      {!product.isDeleted ? (
+                        <>
+                          {isAdmin ? (
+                            <>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleEditProduct(product)}
+                                className="flex items-center gap-1"
+                              >
+                                <Edit className="h-3 w-3" />
+                                Edit
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDeleteProduct(product)}
+                                className="flex items-center gap-1 text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                                Delete
+                              </Button>
+                              <Button className="flex-1">Add to Cart</Button>
+                            </>
+                          ) : (
+                            <Button className="w-full">View Details</Button>
+                          )}
+                        </>
+                      ) : (
+                        <Button variant="secondary" className="w-full" disabled>
+                          Unavailable
+                        </Button>
+                      )}
+                    </div>
+                  </CardFooter>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {/* Empty State */}
+          {!isLoading && products.length === 0 && (
+            <div className="text-center py-12">
+              <div className="text-muted-foreground mb-4">
+                <Search className="h-12 w-12 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No products found</h3>
+                <p className="mb-4">
+                  {searchTerm || filterCategory !== 'all'
+                    ? 'Try adjusting your search or filter criteria'
+                    : 'Get started by adding your first product'
+                  }
+                </p>
+                {!searchTerm && filterCategory === 'all' && isAdmin && (
+                  <Button onClick={handleCreateProduct} className="flex items-center gap-2 mx-auto">
+                    <Plus className="h-4 w-4" />
+                    Add Your First Product
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Pagination */}
+          {!isLoading && totalPages > 1 && (
+            <div className="flex items-center justify-center gap-4">
               <Button
-                key={page}
-                variant={currentPage === page ? "default" : "outline"}
+                variant="outline"
                 size="sm"
-                onClick={() => setCurrentPage(page)}
-                className="w-10"
+                onClick={handlePrevPage}
+                disabled={currentPage === 1}
               >
-                {page}
+                <ChevronLeft className="h-4 w-4 mr-1" />
+                Previous
               </Button>
-            ))}
-          </div>
+              
+              <div className="flex items-center gap-2">
+                {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                  const page = i + 1
+                  if (totalPages <= 5) {
+                    return page
+                  }
+                  // Show first, last, current, and adjacent pages
+                  if (currentPage <= 3) return page
+                  if (currentPage >= totalPages - 2) return totalPages - 4 + i
+                  return currentPage - 2 + i
+                }).map((page) => (
+                  <Button
+                    key={page}
+                    variant={currentPage === page ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCurrentPage(page)}
+                    className="w-10"
+                  >
+                    {page}
+                  </Button>
+                ))}
+              </div>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleNextPage}
-            disabled={currentPage === totalPages}
-          >
-            Next
-            <ChevronRight className="h-4 w-4 ml-1" />
-          </Button>
-        </div>
-      )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleNextPage}
+                disabled={currentPage === totalPages}
+              >
+                Next
+                <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
+          )}
 
-      {/* Product Form Dialog */}
-      <ProductForm
-        product={selectedProduct}
-        isOpen={isFormOpen}
-        onClose={() => setIsFormOpen(false)}
-        onSuccess={handleFormSuccess}
-        mode={formMode}
-      />
+          {/* Product Form Dialog (Admin only) */}
+          {isAdmin && (
+            <ProductForm
+              product={selectedProduct}
+              isOpen={isFormOpen}
+              onClose={() => setIsFormOpen(false)}
+              onSuccess={handleFormSuccess}
+              mode={formMode}
+            />
+          )}
 
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={!!productToDelete} onOpenChange={() => setProductToDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Product</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete "{productToDelete?.name}"? This action will soft delete the product and it can be restored later.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmDelete}
-              disabled={isDeleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isDeleting ? 'Deleting...' : 'Delete Product'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+          {/* Delete Confirmation Dialog (Admin only) */}
+          {isAdmin && (
+            <AlertDialog open={!!productToDelete} onOpenChange={() => setProductToDelete(null)}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Product</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to delete "{productToDelete?.name}"? This action will soft delete the product and it can be restored later.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={confirmDelete}
+                    disabled={isDeleting}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {isDeleting ? 'Deleting...' : 'Delete Product'}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
         </div>
       </div>
     </AuthGuard>

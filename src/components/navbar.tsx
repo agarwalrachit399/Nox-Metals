@@ -2,7 +2,7 @@
 'use client'
 
 import { useState } from 'react'
-import { LogOut, User, Loader2 } from 'lucide-react'
+import { LogOut, User, Loader2, Shield, Eye } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -13,23 +13,23 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/components/auth-provider'
 
 export default function Navbar() {
-  const { user, signOut, loading: authLoading } = useAuth()
+  const { user, signOut, loading: authLoading, role, isAdmin } = useAuth()
   const [isSigningOut, setIsSigningOut] = useState(false)
 
   const handleSignOut = async () => {
     setIsSigningOut(true)
     try {
       await signOut()
+      // Don't set isSigningOut to false here - the component will unmount
       // Auth provider will handle the redirect
     } catch (error) {
       console.error('Error signing out:', error)
       setIsSigningOut(false)
     }
-    // Note: We don't set isSigningOut to false here because
-    // the auth provider will handle the redirect and unmount this component
   }
 
   const getUserInitials = (email: string) => {
@@ -39,6 +39,14 @@ export default function Navbar() {
       .map(part => part.charAt(0).toUpperCase())
       .join('')
       .slice(0, 2)
+  }
+
+  const getRoleIcon = () => {
+    return isAdmin ? <Shield className="h-3 w-3" /> : <Eye className="h-3 w-3" />
+  }
+
+  const getRoleBadgeVariant = () => {
+    return isAdmin ? 'default' : 'secondary'
   }
 
   // Show loading state while auth is being determined
@@ -71,6 +79,13 @@ export default function Navbar() {
           {/* Logo/Brand */}
           <div className="flex items-center space-x-4">
             <h1 className="text-xl font-bold">Product Manager</h1>
+            {/* Role Badge */}
+            {role && (
+              <Badge variant={getRoleBadgeVariant()} className="flex items-center gap-1">
+                {getRoleIcon()}
+                {role}
+              </Badge>
+            )}
           </div>
 
           {/* User Menu */}
@@ -92,13 +107,25 @@ export default function Navbar() {
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56" align="end" forceMount>
                 <DropdownMenuLabel className="font-normal">
-                  <div className="flex flex-col space-y-1">
+                  <div className="flex flex-col space-y-2">
                     <p className="text-sm font-medium leading-none">
                       {user?.email?.split('@')[0] || 'User'}
                     </p>
                     <p className="text-xs leading-none text-muted-foreground">
                       {user?.email}
                     </p>
+                    {/* Role display in dropdown */}
+                    {role && (
+                      <div className="flex items-center gap-2 pt-1">
+                        <Badge variant={getRoleBadgeVariant()} className="flex items-center gap-1 text-xs">
+                          {getRoleIcon()}
+                          {role}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {isAdmin ? 'Full Access' : 'View Only'}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />

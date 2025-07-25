@@ -2,21 +2,25 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { ProductUpdate } from '@/lib/database.types'
+import { validateAuthenticatedUser, validateAdminAccess, createErrorResponse } from '@/lib/auth-utils'
 
-// GET /api/products/[id] - Get single product
+// GET /api/products/[id] - Get single product (accessible to all authenticated users)
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Validate user is authenticated
+    const authResult = await validateAuthenticatedUser()
+    if (!authResult.success) {
+      return createErrorResponse(authResult.error ?? 'Authentication error', authResult.status ?? 401)
+    }
+
     const { id } = await params
     const productId = parseInt(id)
     
     if (isNaN(productId)) {
-      return NextResponse.json(
-        { error: 'Invalid product ID' },
-        { status: 400 }
-      )
+      return createErrorResponse('Invalid product ID', 400)
     }
 
     const { data: product, error } = await supabase
@@ -27,42 +31,36 @@ export async function GET(
     
     if (error) {
       if (error.code === 'PGRST116') { // No rows returned
-        return NextResponse.json(
-          { error: 'Product not found' },
-          { status: 404 }
-        )
+        return createErrorResponse('Product not found', 404)
       }
       console.error('Supabase error:', error)
-      return NextResponse.json(
-        { error: 'Failed to fetch product' },
-        { status: 500 }
-      )
+      return createErrorResponse('Failed to fetch product', 500)
     }
 
     return NextResponse.json(product)
   } catch (error) {
     console.error('Error fetching product:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch product' },
-      { status: 500 }
-    )
+    return createErrorResponse('Failed to fetch product', 500)
   }
 }
 
-// PUT /api/products/[id] - Update product
+// PUT /api/products/[id] - Update product (Admin only)
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Validate admin access
+    const authResult = await validateAdminAccess()
+    if (!authResult.success) {
+      return createErrorResponse(authResult.error ?? 'Authentication error', authResult.status ?? 401)
+    }
+
     const { id } = await params
     const productId = parseInt(id)
     
     if (isNaN(productId)) {
-      return NextResponse.json(
-        { error: 'Invalid product ID' },
-        { status: 400 }
-      )
+      return createErrorResponse('Invalid product ID', 400)
     }
 
     const body = await request.json()
@@ -76,48 +74,30 @@ export async function PUT(
     
     if (fetchError) {
       if (fetchError.code === 'PGRST116') { // No rows returned
-        return NextResponse.json(
-          { error: 'Product not found' },
-          { status: 404 }
-        )
+        return createErrorResponse('Product not found', 404)
       }
       console.error('Supabase error:', fetchError)
-      return NextResponse.json(
-        { error: 'Failed to fetch product' },
-        { status: 500 }
-      )
+      return createErrorResponse('Failed to fetch product', 500)
     }
 
     // Validate fields if provided
     if (body.name !== undefined && (!body.name || body.name.trim() === '')) {
-      return NextResponse.json(
-        { error: 'Name cannot be empty' },
-        { status: 400 }
-      )
+      return createErrorResponse('Name cannot be empty', 400)
     }
 
     if (body.price !== undefined) {
       const price = parseFloat(body.price)
       if (isNaN(price) || price <= 0) {
-        return NextResponse.json(
-          { error: 'Price must be a positive number' },
-          { status: 400 }
-        )
+        return createErrorResponse('Price must be a positive number', 400)
       }
     }
 
     if (body.description !== undefined && (!body.description || body.description.trim() === '')) {
-      return NextResponse.json(
-        { error: 'Description cannot be empty' },
-        { status: 400 }
-      )
+      return createErrorResponse('Description cannot be empty', 400)
     }
 
     if (body.category !== undefined && (!body.category || body.category.trim() === '')) {
-      return NextResponse.json(
-        { error: 'Category cannot be empty' },
-        { status: 400 }
-      )
+      return createErrorResponse('Category cannot be empty', 400)
     }
 
     // Validate category exists if it's being updated
@@ -129,10 +109,7 @@ export async function PUT(
         .single()
 
       if (!categoryExists) {
-        return NextResponse.json(
-          { error: 'Invalid category. Please select a valid category.' },
-          { status: 400 }
-        )
+        return createErrorResponse('Invalid category. Please select a valid category.', 400)
       }
     }
 
@@ -160,36 +137,33 @@ export async function PUT(
 
     if (updateError) {
       console.error('Supabase error:', updateError)
-      return NextResponse.json(
-        { error: 'Failed to update product' },
-        { status: 500 }
-      )
+      return createErrorResponse('Failed to update product', 500)
     }
 
     return NextResponse.json(updatedProduct)
   } catch (error) {
     console.error('Error updating product:', error)
-    return NextResponse.json(
-      { error: 'Failed to update product' },
-      { status: 500 }
-    )
+    return createErrorResponse('Failed to update product', 500)
   }
 }
 
-// DELETE /api/products/[id] - Soft delete product
+// DELETE /api/products/[id] - Delete product (Admin only)
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Validate admin access
+    const authResult = await validateAdminAccess()
+    if (!authResult.success) {
+      return createErrorResponse(authResult.error ?? 'Authentication error', authResult.status ?? 401)  
+    }
+
     const { id } = await params
     const productId = parseInt(id)
     
     if (isNaN(productId)) {
-      return NextResponse.json(
-        { error: 'Invalid product ID' },
-        { status: 400 }
-      )
+      return createErrorResponse('Invalid product ID', 400)
     }
 
     const { searchParams } = request.nextUrl
@@ -204,16 +178,10 @@ export async function DELETE(
     
     if (fetchError) {
       if (fetchError.code === 'PGRST116') { // No rows returned
-        return NextResponse.json(
-          { error: 'Product not found' },
-          { status: 404 }
-        )
+        return createErrorResponse('Product not found', 404)
       }
       console.error('Supabase error:', fetchError)
-      return NextResponse.json(
-        { error: 'Failed to fetch product' },
-        { status: 500 }
-      )
+      return createErrorResponse('Failed to fetch product', 500)
     }
 
     if (hardDelete) {
@@ -225,10 +193,7 @@ export async function DELETE(
 
       if (deleteError) {
         console.error('Supabase error:', deleteError)
-        return NextResponse.json(
-          { error: 'Failed to delete product' },
-          { status: 500 }
-        )
+        return createErrorResponse('Failed to delete product', 500)
       }
 
       return NextResponse.json({ 
@@ -249,10 +214,7 @@ export async function DELETE(
 
       if (updateError) {
         console.error('Supabase error:', updateError)
-        return NextResponse.json(
-          { error: 'Failed to delete product' },
-          { status: 500 }
-        )
+        return createErrorResponse('Failed to delete product', 500)
       }
       
       return NextResponse.json({
@@ -262,9 +224,6 @@ export async function DELETE(
     }
   } catch (error) {
     console.error('Error deleting product:', error)
-    return NextResponse.json(
-      { error: 'Failed to delete product' },
-      { status: 500 }
-    )
+    return createErrorResponse('Failed to delete product', 500)
   }
 }

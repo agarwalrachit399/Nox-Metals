@@ -12,13 +12,13 @@ interface AuthGuardProps {
 export default function AuthGuard({ children, fallback }: AuthGuardProps) {
   const { user, loading } = useAuth()
 
-  // Show loading while checking auth
+  // Show loading while checking auth or during transitions
   if (loading) {
     return (
       fallback || (
-        <div className="min-h-screen flex items-center justify-center">
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
           <div className="text-center">
-            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
             <p className="text-muted-foreground">Loading...</p>
           </div>
         </div>
@@ -26,13 +26,13 @@ export default function AuthGuard({ children, fallback }: AuthGuardProps) {
     )
   }
 
-  // If user is not authenticated, middleware will handle redirect
-  // So we can just show loading state here
+  // If user is not authenticated, show loading while redirect happens
+  // (middleware should handle the redirect)
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
           <p className="text-muted-foreground">Redirecting...</p>
         </div>
       </div>

@@ -2,6 +2,29 @@
 export interface Database {
   public: {
     Tables: {
+      users: {
+        Row: {
+          id: string
+          email: string
+          role: 'Admin' | 'User'
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          email: string
+          role?: 'Admin' | 'User'
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          email?: string
+          role?: 'Admin' | 'User'
+          created_at?: string
+          updated_at?: string
+        }
+      }
       products: {
         Row: {
           id: number
@@ -94,15 +117,24 @@ export interface Database {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_user_role: {
+        Args: {}
+        Returns: string
+      }
     }
     Enums: {
-      [_ in never]: never
+      user_role: 'Admin' | 'User'
     }
   }
 }
 
 // Helper types for easier usage
+export type UserRole = 'Admin' | 'User'
+
+export type UserProfile = Database['public']['Tables']['users']['Row']
+export type UserProfileInsert = Database['public']['Tables']['users']['Insert']
+export type UserProfileUpdate = Database['public']['Tables']['users']['Update']
+
 export type Product = Database['public']['Tables']['products']['Row']
 export type ProductInsert = Database['public']['Tables']['products']['Insert']
 export type ProductUpdate = Database['public']['Tables']['products']['Update']

@@ -2,10 +2,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { ProductInsert } from '@/lib/database.types'
+import { validateAuthenticatedUser, validateAdminAccess, createErrorResponse } from '@/lib/auth-utils'
 
-// GET /api/products - Get all products with filtering, sorting, and pagination
+// GET /api/products - Get all products (accessible to all authenticated users)
 export async function GET(request: NextRequest) {
   try {
+    // Validate user is authenticated
+    const authResult = await validateAuthenticatedUser()
+    if (!authResult.success) {
+      return createErrorResponse(authResult.error ?? 'Authentication error', authResult.status ?? 401)
+    }
+
     const { searchParams } = request.nextUrl
     const includeDeleted = searchParams.get('includeDeleted') === 'true'
     const search = searchParams.get('search')
@@ -62,10 +69,7 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('Supabase error:', error)
-      return NextResponse.json(
-        { error: 'Failed to fetch products' },
-        { status: 500 }
-      )
+      return createErrorResponse('Failed to fetch products', 500)
     }
 
     return NextResponse.json({
@@ -79,33 +83,30 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('Error fetching products:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch products' },
-      { status: 500 }
-    )
+    return createErrorResponse('Failed to fetch products', 500)
   }
 }
 
-// POST /api/products - Create new product
+// POST /api/products - Create new product (Admin only)
 export async function POST(request: NextRequest) {
   try {
+    // Validate admin access
+    const authResult = await validateAdminAccess()
+    if (!authResult.success) {
+      return createErrorResponse(authResult.error ?? 'Authentication error', authResult.status ?? 401)
+    }
+
     const body = await request.json()
     
     // Validate required fields
     if (!body.name?.trim() || !body.price || !body.description?.trim() || !body.category?.trim()) {
-      return NextResponse.json(
-        { error: 'Missing required fields: name, price, description, category' },
-        { status: 400 }
-      )
+      return createErrorResponse('Missing required fields: name, price, description, category', 400)
     }
 
     // Validate price is a positive number
     const price = parseFloat(body.price)
     if (isNaN(price) || price <= 0) {
-      return NextResponse.json(
-        { error: 'Price must be a positive number' },
-        { status: 400 }
-      )
+      return createErrorResponse('Price must be a positive number', 400)
     }
 
     // Validate category exists
@@ -116,10 +117,7 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (!categoryExists) {
-      return NextResponse.json(
-        { error: 'Invalid category. Please select a valid category.' },
-        { status: 400 }
-      )
+      return createErrorResponse('Invalid category. Please select a valid category.', 400)
     }
 
     const productData: ProductInsert = {
@@ -139,18 +137,12 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error('Supabase error:', error)
-      return NextResponse.json(
-        { error: 'Failed to create product' },
-        { status: 500 }
-      )
+      return createErrorResponse('Failed to create product', 500)
     }
 
     return NextResponse.json(newProduct, { status: 201 })
   } catch (error) {
     console.error('Error creating product:', error)
-    return NextResponse.json(
-      { error: 'Failed to create product' },
-      { status: 500 }
-    )
+    return createErrorResponse('Failed to create product', 500)
   }
 }
