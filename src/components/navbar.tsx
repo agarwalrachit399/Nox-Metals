@@ -16,17 +16,20 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useAuth } from '@/components/auth-provider'
 
 export default function Navbar() {
-  const { user, signOut } = useAuth()
+  const { user, signOut, loading: authLoading } = useAuth()
   const [isSigningOut, setIsSigningOut] = useState(false)
 
   const handleSignOut = async () => {
     setIsSigningOut(true)
     try {
       await signOut()
+      // Auth provider will handle the redirect
     } catch (error) {
       console.error('Error signing out:', error)
       setIsSigningOut(false)
     }
+    // Note: We don't set isSigningOut to false here because
+    // the auth provider will handle the redirect and unmount this component
   }
 
   const getUserInitials = (email: string) => {
@@ -36,6 +39,29 @@ export default function Navbar() {
       .map(part => part.charAt(0).toUpperCase())
       .join('')
       .slice(0, 2)
+  }
+
+  // Show loading state while auth is being determined
+  if (authLoading) {
+    return (
+      <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container mx-auto px-4">
+          <div className="flex h-16 items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <h1 className="text-xl font-bold">Product Manager</h1>
+            </div>
+            <div className="flex items-center space-x-4">
+              <Loader2 className="h-5 w-5 animate-spin" />
+            </div>
+          </div>
+        </div>
+      </nav>
+    )
+  }
+
+  // Don't render navbar if no user (should be handled by AuthGuard, but safety check)
+  if (!user) {
+    return null
   }
 
   return (
@@ -51,7 +77,11 @@ export default function Navbar() {
           <div className="flex items-center space-x-4">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+                <Button 
+                  variant="ghost" 
+                  className="relative h-10 w-10 rounded-full"
+                  disabled={isSigningOut}
+                >
                   <Avatar className="h-10 w-10">
                     <AvatarImage src="" alt={user?.email || ''} />
                     <AvatarFallback className="bg-primary text-primary-foreground">

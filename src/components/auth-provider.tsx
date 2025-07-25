@@ -2,6 +2,7 @@
 'use client'
 
 import { createContext, useContext, useEffect, useState } from 'react'
+import { useRouter, usePathname } from 'next/navigation'
 import { User, Session } from '@supabase/supabase-js'
 import { createClient } from '@/lib/auth'
 
@@ -35,7 +36,15 @@ export default function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
+  const [initialLoad, setInitialLoad] = useState(true)
+  const router = useRouter()
+  const pathname = usePathname()
   const supabase = createClient()
+
+  // Auth pages and protected pages
+  const authPages = ['/login', '/signup']
+  const isAuthPage = authPages.includes(pathname)
+  const isProtectedPage = pathname === '/' || pathname.startsWith('/dashboard')
 
   useEffect(() => {
     // Get initial session
@@ -53,6 +62,7 @@ export default function AuthProvider({ children }: AuthProviderProps) {
         console.error('Error in getInitialSession:', error)
       } finally {
         setLoading(false)
+        setInitialLoad(false)
       }
     }
 
@@ -63,30 +73,47 @@ export default function AuthProvider({ children }: AuthProviderProps) {
       async (event, session) => {
         console.log('Auth state changed:', event, session?.user?.email)
         
+        const previousUser = user
+        const newUser = session?.user ?? null
+        
         setSession(session)
-        setUser(session?.user ?? null)
+        setUser(newUser)
         setLoading(false)
 
-        // Let middleware handle redirects instead of doing it here
-        // This prevents conflicts and race conditions
+        // Only handle navigation after initial load and on actual auth state changes
+        if (!initialLoad) {
+          if (event === 'SIGNED_IN' && newUser && !previousUser) {
+            // User just signed in - redirect to home if on auth page
+            if (isAuthPage) {
+              console.log('User signed in, redirecting to home')
+              router.push('/')
+            }
+          } else if (event === 'SIGNED_OUT' && !newUser && previousUser) {
+            // User just signed out - redirect to login if on protected page
+            if (isProtectedPage) {
+              console.log('User signed out, redirecting to login')
+              router.push('/login')
+            }
+          }
+        }
       }
     )
 
     return () => {
       subscription?.unsubscribe()
     }
-  }, [supabase])
+  }, [supabase, router, pathname, isAuthPage, isProtectedPage, initialLoad, user])
 
   const signOut = async () => {
-    setLoading(true)
     try {
+      setLoading(true)
       const { error } = await supabase.auth.signOut()
       
       if (error) {
         console.error('Error signing out:', error)
         setLoading(false)
       }
-      // Loading will be set to false by the auth state change listener
+      // Auth state change listener will handle the redirect
     } catch (error) {
       console.error('Error in signOut:', error)
       setLoading(false)

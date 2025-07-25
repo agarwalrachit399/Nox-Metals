@@ -33,26 +33,27 @@ export async function middleware(request: NextRequest) {
   // Refresh session if expired - required for Server Components
   const { data: { user }, error } = await supabase.auth.getUser()
 
-  // Handle authentication redirects
   const url = request.nextUrl.clone()
   const isAuthPage = url.pathname === '/login' || url.pathname === '/signup'
   const isProtectedPage = url.pathname === '/' || url.pathname.startsWith('/dashboard')
 
-if (error || !user) {
-  // User is not authenticated
-  if (isProtectedPage) {
-    url.pathname = '/login'
-    return NextResponse.redirect(url)
+  // Only handle redirects for direct URL access (safety net)
+  // Client-side navigation is handled by AuthProvider
+  if (error || !user) {
+    // User is not authenticated
+    if (isProtectedPage) {
+      console.log('Middleware: Redirecting unauthenticated user to login')
+      url.pathname = '/login'
+      return NextResponse.redirect(url)
+    }
+  } else {
+    // User is authenticated  
+    if (isAuthPage) {
+      console.log('Middleware: Redirecting authenticated user to home')
+      url.pathname = '/'
+      return NextResponse.redirect(url)
+    }
   }
-} else {
-  // User is authenticated  
-  if (isAuthPage) {
-    // Add this console log to debug
-    console.log('Authenticated user on auth page, redirecting to home')
-    url.pathname = '/'
-    return NextResponse.redirect(url)
-  }
-}
 
   return response
 }

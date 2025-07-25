@@ -3,7 +3,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Eye, EyeOff, Loader2, LogIn } from 'lucide-react'
+import { Eye, EyeOff, Loader2, LogIn, CheckCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -30,6 +30,7 @@ export default function LoginPage() {
   const [errors, setErrors] = useState<FormErrors>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [loginSuccess, setLoginSuccess] = useState(false)
   
   const supabase = createClient()
 
@@ -89,8 +90,10 @@ export default function LoginPage() {
           setErrors({ submit: error.message })
         }
       } else if (data.user) {
-        // Success - redirect will be handled by auth context
-        console.log('Login successful')
+        // Success - show success state while auth provider handles redirect
+        setLoginSuccess(true)
+        // Clear form for security
+        setFormData({ email: '', password: '' })
       }
     } catch (error) {
       console.error('Login error:', error)
@@ -98,6 +101,32 @@ export default function LoginPage() {
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  // Show success state while redirecting
+  if (loginSuccess) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="w-full max-w-md">
+          <Card>
+            <CardHeader className="text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100 mb-4">
+                <CheckCircle className="h-6 w-6 text-green-600" />
+              </div>
+              <CardTitle className="text-green-800">Login Successful!</CardTitle>
+              <CardDescription>
+                Redirecting you to the dashboard...
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
   }
 
   return (
