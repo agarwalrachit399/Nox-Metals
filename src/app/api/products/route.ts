@@ -1,0 +1,156 @@
+// app/api/products/route.ts
+import { NextRequest, NextResponse } from 'next/server'
+import { supabase } from '@/lib/supabase'
+import { ProductInsert } from '@/lib/database.types'
+
+// GET /api/products - Get all products with filtering, sorting, and pagination
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = request.nextUrl
+    const includeDeleted = searchParams.get('includeDeleted') === 'true'
+    const search = searchParams.get('search')
+    const category = searchParams.get('category')
+    const sortBy = searchParams.get('sortBy') || 'created_at-desc'
+    const page = parseInt(searchParams.get('page') || '1')
+    const limit = parseInt(searchParams.get('limit') || '10')
+
+    // Start building the query
+    let query = supabase
+      .from('products')
+      .select('*', { count: 'exact' })
+
+    // Filter by deleted status
+    if (!includeDeleted) {
+      query = query.eq('is_deleted', false)
+    }
+
+    // Filter by search term (search in name and description)
+    if (search) {
+      query = query.or(`name.ilike.%${search}%,description.ilike.%${search}%`)
+    }
+
+    // Filter by category
+    if (category && category !== 'all') {
+      query = query.eq('category', category)
+    }
+
+    // Apply sorting
+    switch (sortBy) {
+      case 'name-asc':
+        query = query.order('name', { ascending: true })
+        break
+      case 'name-desc':
+        query = query.order('name', { ascending: false })
+        break
+      case 'price-asc':
+        query = query.order('price', { ascending: true })
+        break
+      case 'price-desc':
+        query = query.order('price', { ascending: false })
+        break
+      case 'created_at-desc':
+      default:
+        query = query.order('created_at', { ascending: false })
+        break
+    }
+
+    // Apply pagination
+    const startIndex = (page - 1) * limit
+    query = query.range(startIndex, startIndex + limit - 1)
+
+    const { data: products, error, count } = await query
+
+    if (error) {
+      console.error('Supabase error:', error)
+      return NextResponse.json(
+        { error: 'Failed to fetch products' },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json({
+      products: products || [],
+      pagination: {
+        page,
+        limit,
+        total: count || 0,
+        totalPages: Math.ceil((count || 0) / limit)
+      }
+    })
+  } catch (error) {
+    console.error('Error fetching products:', error)
+    return NextResponse.json(
+      { error: 'Failed to fetch products' },
+      { status: 500 }
+    )
+  }
+}
+
+// POST /api/products - Create new product
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json()
+    
+    // Validate required fields
+    if (!body.name?.trim() || !body.price || !body.description?.trim() || !body.category?.trim()) {
+      return NextResponse.json(
+        { error: 'Missing required fields: name, price, description, category' },
+        { status: 400 }
+      )
+    }
+
+    // Validate price is a positive number
+    const price = parseFloat(body.price)
+    if (isNaN(price) || price <= 0) {
+      return NextResponse.json(
+        { error: 'Price must be a positive number' },
+        { status: 400 }
+      )
+    }
+
+    // Validate category exists
+    const { data: categoryExists } = await supabase
+      .from('categories')
+      .select('name')
+      .eq('name', body.category.trim())
+      .single()
+
+    if (!categoryExists) {
+      return NextResponse.json(
+        { error: 'Invalid category. Please select a valid category.' },
+        { status: 400 }
+      )
+    }
+
+    const productData: ProductInsert = {
+      name: body.name.trim(),
+      price: price,
+      description: body.description.trim(),
+      category: body.category.trim(),
+      image: body.image?.trim() || null,
+      is_deleted: false
+    }
+
+    const { data: newProduct, error } = await supabase
+      .from('products')
+      .insert(productData)
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Supabase error:', error)
+      return NextResponse.json(
+        { error: 'Failed to create product' },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json(newProduct, { status: 201 })
+  } catch (error) {
+    console.error('Error creating product:', error)
+    return NextResponse.json(
+      { error: 'Failed to create product' },
+      { status: 500 }
+    )
+  }
+}
