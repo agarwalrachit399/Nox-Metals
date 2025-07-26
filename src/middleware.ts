@@ -1,4 +1,4 @@
-// middleware.ts
+// middleware.ts - Updated to include audit-logs route
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
@@ -35,7 +35,9 @@ export async function middleware(request: NextRequest) {
 
   const url = request.nextUrl.clone()
   const isAuthPage = url.pathname === '/login' || url.pathname === '/signup'
-  const isProtectedPage = url.pathname === '/' || url.pathname.startsWith('/dashboard')
+  const isProtectedPage = url.pathname === '/' || 
+                          url.pathname.startsWith('/dashboard') || 
+                          url.pathname === '/audit-logs'  // Add audit-logs as protected
 
   // Only handle redirects for direct URL access (safety net)
   // Client-side navigation is handled by AuthProvider

@@ -1,8 +1,9 @@
-// components/navbar.tsx
+// components/navbar.tsx - Updated with audit logs link
 'use client'
 
 import { useState } from 'react'
-import { LogOut, User, Loader2, Shield, Eye } from 'lucide-react'
+import Link from 'next/link'
+import { LogOut, User, Loader2, Shield, Eye, History, Home } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -15,17 +16,17 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/components/auth-provider'
+import { usePathname } from 'next/navigation'
 
 export default function Navbar() {
   const { user, signOut, loading: authLoading, role, isAdmin } = useAuth()
   const [isSigningOut, setIsSigningOut] = useState(false)
+  const pathname = usePathname()
 
   const handleSignOut = async () => {
     setIsSigningOut(true)
     try {
       await signOut()
-      // Don't set isSigningOut to false here - the component will unmount
-      // Auth provider will handle the redirect
     } catch (error) {
       console.error('Error signing out:', error)
       setIsSigningOut(false)
@@ -67,7 +68,7 @@ export default function Navbar() {
     )
   }
 
-  // Don't render navbar if no user (should be handled by AuthGuard, but safety check)
+  // Don't render navbar if no user
   if (!user) {
     return null
   }
@@ -76,9 +77,42 @@ export default function Navbar() {
     <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between">
-          {/* Logo/Brand */}
-          <div className="flex items-center space-x-4">
-            <h1 className="text-xl font-bold">Product Manager</h1>
+          {/* Logo/Brand & Navigation */}
+          <div className="flex items-center space-x-6">
+            <Link href="/" className="text-xl font-bold hover:text-primary transition-colors">
+              Product Manager
+            </Link>
+            
+            {/* Navigation Links */}
+            <div className="hidden md:flex items-center space-x-4">
+              <Link 
+                href="/" 
+                className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  pathname === '/' 
+                    ? 'bg-primary text-primary-foreground' 
+                    : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                }`}
+              >
+                <Home className="h-4 w-4" />
+                Products
+              </Link>
+              
+              {/* Admin-only Audit Logs link */}
+              {isAdmin && (
+                <Link 
+                  href="/audit-logs" 
+                  className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    pathname === '/audit-logs' 
+                      ? 'bg-primary text-primary-foreground' 
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                  }`}
+                >
+                  <History className="h-4 w-4" />
+                  Audit Logs
+                </Link>
+              )}
+            </div>
+
             {/* Role Badge */}
             {role && (
               <Badge variant={getRoleBadgeVariant()} className="flex items-center gap-1">
@@ -129,6 +163,27 @@ export default function Navbar() {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                
+                {/* Navigation items for mobile */}
+                <div className="md:hidden">
+                  <DropdownMenuItem asChild>
+                    <Link href="/" className="cursor-pointer">
+                      <Home className="mr-2 h-4 w-4" />
+                      <span>Products</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  
+                  {isAdmin && (
+                    <DropdownMenuItem asChild>
+                      <Link href="/audit-logs" className="cursor-pointer">
+                        <History className="mr-2 h-4 w-4" />
+                        <span>Audit Logs</span>
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
+                </div>
+                
                 <DropdownMenuItem className="cursor-pointer" disabled>
                   <User className="mr-2 h-4 w-4" />
                   <span>Profile</span>
