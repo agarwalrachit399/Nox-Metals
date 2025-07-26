@@ -1,10 +1,12 @@
-// lib/auth-utils.ts - COMPLETE FINAL VERSION
+// lib/auth-utils.ts - Enhanced with 401 recovery
 import { NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { UserRole } from './database.types'
+import { authCache } from './auth-cache'
+import { AuthErrorHandler, AuthErrorType } from './auth-errors'
 
-// Create server-side Supabase client for API routes - FIXED
+// Create server-side Supabase client for API routes
 export const createServerSupabaseClient = async () => {
   try {
     console.log('🏗️ Creating server Supabase client...')
@@ -28,7 +30,6 @@ export const createServerSupabaseClient = async () => {
                 cookieStore.set(name, value, options)
               })
             } catch (error) {
-              // This can fail in API routes, that's ok
               console.log('⚠️ Could not set cookies in API route:', error)
             }
           },
@@ -41,34 +42,120 @@ export const createServerSupabaseClient = async () => {
   }
 }
 
-// Get authenticated user from API request - FIXED
-export const getAuthenticatedUser = async () => {
+// Enhanced auth function with retry and error handling
+export const getAuthenticatedUser = async (request?: NextRequest, retryOnFailure: boolean = true) => {
   try {
-    console.log('🔐 Getting authenticated user...')
+    // Get cookies string for cache key
+    let cookiesString = ''
+    
+    if (request) {
+      // From middleware/API route
+      cookiesString = request.headers.get('cookie') || ''
+    } else {
+      // From server component
+      const cookieStore = await cookies()
+      cookiesString = cookieStore.getAll()
+        .map(cookie => `${cookie.name}=${cookie.value}`)
+        .join(';')
+    }
+    
+    // Check cache first
+    const cached = authCache.get(cookiesString)
+    if (cached) {
+      console.log('⚡ Using cached auth state')
+      return { user: cached.user, error: cached.user ? null : 'Not authenticated' }
+    }
+    
+    console.log('🔍 Cache miss - fetching auth state')
+    
+    // Cache miss - perform actual auth check
     const supabase = await createServerSupabaseClient()
     const { data: { user }, error } = await supabase.auth.getUser()
 
-    console.log('👤 Auth user result:', {
+    console.log('👤 Fresh auth result:', {
       hasUser: !!user,
       userId: user?.id,
       email: user?.email,
       hasError: !!error,
-      error: error?.message
+      errorMessage: error?.message
     })
 
-    if (error || !user) {
-      console.log('❌ No authenticated user:', error?.message || 'No user')
+    // Handle different types of auth errors
+    if (error) {
+      console.log('❌ Auth error detected:', error.message)
+      
+      // Clear cache on auth error
+      authCache.clear(cookiesString)
+      
+      // Categorize the error
+      if (error.message.includes('invalid_token') || 
+          error.message.includes('token_expired') ||
+          error.message.includes('JWT expired')) {
+        
+        AuthErrorHandler.createError(
+          AuthErrorType.TOKEN_EXPIRED,
+          `Token expired: ${error.message}`,
+          retryOnFailure
+        )
+        
+        // Try to refresh session if retry is enabled
+        if (retryOnFailure) {
+          console.log('🔄 Attempting token refresh due to expired token...')
+          try {
+            const { data, error: refreshError } = await supabase.auth.refreshSession()
+            
+            if (refreshError || !data.session) {
+              console.error('❌ Token refresh failed:', refreshError?.message)
+              AuthErrorHandler.createError(
+                AuthErrorType.REFRESH_FAILED,
+                `Refresh failed: ${refreshError?.message || 'No session returned'}`
+              )
+              return { user: null, error: 'Token refresh failed' }
+            }
+            
+            console.log('✅ Token refresh successful, caching new session')
+            const refreshedUser = data.session.user
+            authCache.set(cookiesString, refreshedUser)
+            return { user: refreshedUser, error: null }
+            
+          } catch (refreshError) {
+            console.error('💥 Error during token refresh:', refreshError)
+            AuthErrorHandler.createError(
+              AuthErrorType.NETWORK_ERROR,
+              `Network error during refresh: ${refreshError}`
+            )
+          }
+        }
+      } else {
+        AuthErrorHandler.createError(
+          AuthErrorType.INVALID_SESSION,
+          `Auth error: ${error.message}`
+        )
+      }
+      
+      return { user: null, error: error.message }
+    }
+
+    // Cache the successful result
+    authCache.set(cookiesString, user)
+
+    if (!user) {
+      console.log('❌ No authenticated user')
       return { user: null, error: 'Not authenticated' }
     }
 
     return { user, error: null }
   } catch (error) {
     console.error('💥 Error in getAuthenticatedUser:', error)
+    AuthErrorHandler.createError(
+      AuthErrorType.NETWORK_ERROR,
+      `Network error: ${error}`
+    )
     return { user: null, error: 'Authentication failed' }
   }
 }
 
-// Get user role from database - FIXED
+// Get user role from database
 export const getUserRole = async (userId: string): Promise<UserRole | null> => {
   try {
     console.log('👑 Getting user role for:', userId)
@@ -91,7 +178,6 @@ export const getUserRole = async (userId: string): Promise<UserRole | null> => {
       return null
     }
 
-    // Explicit type assertion to ensure TypeScript recognizes both Admin and User
     return (userProfile?.role as UserRole) ?? null
   } catch (error) {
     console.error('💥 Error in getUserRole:', error)
@@ -99,36 +185,39 @@ export const getUserRole = async (userId: string): Promise<UserRole | null> => {
   }
 }
 
-// Validate user has required role
-export const validateUserRole = async (requiredRole: UserRole) => {
-  const { user, error } = await getAuthenticatedUser()
+// Validate any authenticated user with enhanced error handling
+export const validateAuthenticatedUser = async (request?: NextRequest) => {
+  console.log('🔒 Validating authenticated user...')
+  
+  const { user, error } = await getAuthenticatedUser(request)
   
   if (error || !user) {
+    console.log('❌ User validation failed:', error)
+    
+    // Determine appropriate status code based on error type
+    let status = 401
+    if (error?.includes('refresh failed') || error?.includes('token expired')) {
+      status = 401 // Unauthorized - need to re-authenticate
+    } else if (error?.includes('network') || error?.includes('failed')) {
+      status = 503 // Service unavailable - temporary issue
+    }
+    
     return {
       success: false,
       error: 'Authentication required',
-      status: 401
+      status,
+      originalError: error
     }
   }
 
   const userRole = await getUserRole(user.id)
   
-  if (!userRole) {
-    return {
-      success: false,
-      error: 'User role not found',
-      status: 403
-    }
-  }
-
-  if (userRole !== requiredRole) {
-    return {
-      success: false,
-      error: `${requiredRole} access required`,
-      status: 403
-    }
-  }
-
+  console.log('✅ User validation success:', {
+    userId: user.id,
+    email: user.email,
+    role: userRole
+  })
+  
   return {
     success: true,
     user,
@@ -136,18 +225,27 @@ export const validateUserRole = async (requiredRole: UserRole) => {
   }
 }
 
-// Validate admin access
-export const validateAdminAccess = async () => {
+// Validate admin access with enhanced error handling
+export const validateAdminAccess = async (request?: NextRequest) => {
   console.log('🔒 Validating admin access...')
   
-  const { user, error } = await getAuthenticatedUser()
+  const { user, error } = await getAuthenticatedUser(request)
   
   if (error || !user) {
     console.log('❌ Admin validation failed: No user')
+    
+    let status = 401
+    if (error?.includes('refresh failed') || error?.includes('token expired')) {
+      status = 401
+    } else if (error?.includes('network') || error?.includes('failed')) {
+      status = 503
+    }
+    
     return {
       success: false,
       error: 'Authentication required',
-      status: 401
+      status,
+      originalError: error
     }
   }
 
@@ -184,183 +282,30 @@ export const validateAdminAccess = async () => {
   }
 }
 
-// Validate any authenticated user
-export const validateAuthenticatedUser = async () => {
-  console.log('🔒 Validating authenticated user...')
-  
-  const { user, error } = await getAuthenticatedUser()
-  
-  if (error || !user) {
-    console.log('❌ User validation failed:', error)
-    return {
-      success: false,
-      error: 'Authentication required',
-      status: 401
-    }
-  }
-
-  const userRole = await getUserRole(user.id)
-  
-  console.log('✅ User validation success:', {
-    userId: user.id,
-    email: user.email,
-    role: userRole
-  })
-  
-  return {
-    success: true,
-    user,
-    role: userRole
-  }
-}
-
-// Check if user is admin (without throwing errors)
-export const isUserAdmin = async (): Promise<boolean> => {
-  try {
-    const { user, error } = await getAuthenticatedUser()
-    
-    if (error || !user) {
-      return false
-    }
-
-    const userRole = await getUserRole(user.id)
-    return userRole === 'Admin'
-  } catch (error) {
-    console.error('Error checking admin status:', error)
-    return false
-  }
-}
-
-// Get current user profile (returns null if not authenticated)
-export const getCurrentUserProfile = async () => {
-  try {
-    const { user, error } = await getAuthenticatedUser()
-    
-    if (error || !user) {
-      return null
-    }
-
-    const supabase = await createServerSupabaseClient()
-    const { data: profile, error: profileError } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', user.id)
-      .single()
-
-    if (profileError) {
-      console.error('Error fetching user profile:', profileError)
-      return null
-    }
-
-    return profile
-  } catch (error) {
-    console.error('Error in getCurrentUserProfile:', error)
-    return null
-  }
-}
-
-// API Response helpers
-export const createErrorResponse = (message: string, status: number) => {
+// Enhanced error response with retry information
+export const createErrorResponse = (message: string, status: number, retryable: boolean = false) => {
   console.log(`📤 Sending error response: ${status} - ${message}`)
-  return Response.json({ error: message }, { status })
+  
+  const response = {
+    error: message,
+    timestamp: new Date().toISOString(),
+    retryable
+  }
+  
+  // Add retry headers for 401s
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json'
+  }
+  
+  if (status === 401 && retryable) {
+    headers['X-Auth-Retry'] = 'true'
+    headers['X-Auth-Error'] = 'token_expired'
+  }
+  
+  return new Response(JSON.stringify(response), { status, headers })
 }
 
 export const createSuccessResponse = (data: any, status: number = 200) => {
   console.log(`📤 Sending success response: ${status}`)
   return Response.json(data, { status })
 }
-
-// Utility function to get user from request headers (alternative approach)
-export const getUserFromRequest = async (request: NextRequest) => {
-  try {
-    // This could be used if you want to pass auth via headers instead of cookies
-    const authHeader = request.headers.get('Authorization')
-    
-    if (!authHeader?.startsWith('Bearer ')) {
-      return null
-    }
-
-    const token = authHeader.substring(7)
-    const supabase = await createServerSupabaseClient()
-    
-    const { data: { user }, error } = await supabase.auth.getUser(token)
-    
-    if (error || !user) {
-      return null
-    }
-
-    return user
-  } catch (error) {
-    console.error('Error getting user from request:', error)
-    return null
-  }
-}
-
-// Utility to check permissions for specific resources
-export const canUserAccessResource = async (resourceType: string, resourceId: string | number) => {
-  try {
-    const { user, error } = await getAuthenticatedUser()
-    
-    if (error || !user) {
-      return false
-    }
-
-    const userRole = await getUserRole(user.id)
-    
-    // Admins can access everything
-    if (userRole === 'Admin') {
-      return true
-    }
-
-    // Add resource-specific logic here
-    switch (resourceType) {
-      case 'product':
-        // All authenticated users can view products
-        return true
-      case 'category':
-        // All authenticated users can view categories
-        return true
-      case 'audit_log':
-        // Only admins can view audit logs
-        return userRole === 'Admin'
-      case 'user_profile':
-        // Users can only access their own profile
-        return user.id === resourceId
-      default:
-        return false
-    }
-  } catch (error) {
-    console.error('Error checking resource access:', error)
-    return false
-  }
-}
-
-// Rate limiting helper (basic implementation)
-const rateLimitMap = new Map<string, { count: number; resetTime: number }>()
-
-export const checkRateLimit = (userId: string, maxRequests: number = 100, windowMs: number = 60000): boolean => {
-  const now = Date.now()
-  const userLimit = rateLimitMap.get(userId)
-
-  if (!userLimit || now > userLimit.resetTime) {
-    rateLimitMap.set(userId, { count: 1, resetTime: now + windowMs })
-    return true
-  }
-
-  if (userLimit.count >= maxRequests) {
-    return false
-  }
-
-  userLimit.count++
-  return true
-}
-
-// Clean up rate limit map periodically
-setInterval(() => {
-  const now = Date.now()
-  for (const [userId, limit] of rateLimitMap.entries()) {
-    if (now > limit.resetTime) {
-      rateLimitMap.delete(userId)
-    }
-  }
-}, 60000) // Clean up every minute

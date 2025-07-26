@@ -7,8 +7,8 @@ export async function GET(request: NextRequest) {
   try {
     console.log('🔍 API: /api/audit-logs called')
     
-    // Validate admin access
-    const authResult = await validateAdminAccess()
+    // Use cached admin validation
+    const authResult = await validateAdminAccess(request)
     console.log('🔑 Admin validation result:', authResult)
     
     if (!authResult.success) {

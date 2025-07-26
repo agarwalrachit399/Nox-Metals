@@ -3,13 +3,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { validateAuthenticatedUser, validateAdminAccess, createErrorResponse, createServerSupabaseClient } from '@/lib/auth-utils'
 
 // GET /api/categories - Get all categories (accessible to all authenticated users)
-// src/app/api/categories/route.ts - Updated GET function  
 export async function GET(request: NextRequest) {
   try {
     console.log('🔍 API: /api/categories called')
     
-    // Validate user is authenticated
-    const authResult = await validateAuthenticatedUser()
+    // Use cached validation
+    const authResult = await validateAuthenticatedUser(request)
     console.log('🔑 Categories auth validation:', authResult)
     
     if (!authResult.success) {
@@ -51,8 +50,8 @@ export async function POST(request: NextRequest) {
   try {
     console.log('🔍 API: POST /api/categories called')
     
-    // Validate admin access
-    const authResult = await validateAdminAccess()
+    // Use cached admin validation
+    const authResult = await validateAdminAccess(request)
     console.log('🔑 Admin validation result:', authResult)
     
     if (!authResult.success) {

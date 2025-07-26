@@ -4,14 +4,12 @@ import { ProductInsert } from '@/lib/database.types'
 import { validateAuthenticatedUser, validateAdminAccess, createErrorResponse, createServerSupabaseClient } from '@/lib/auth-utils'
 
 // GET /api/products - Get all products (accessible to all authenticated users)
-// Update your src/app/api/products/route.ts GET function with debug logging
-
 export async function GET(request: NextRequest) {
   try {
     console.log('🔍 API: /api/products called')
     
-    // Validate user is authenticated
-    const authResult = await validateAuthenticatedUser()
+    // Use cached validation
+    const authResult = await validateAuthenticatedUser(request)
     console.log('🔑 Auth validation result:', authResult)
     
     if (!authResult.success) {
@@ -132,8 +130,8 @@ export async function POST(request: NextRequest) {
   try {
     console.log('🔍 API: POST /api/products called')
     
-    // Validate admin access
-    const authResult = await validateAdminAccess()
+    // Use cached admin validation
+    const authResult = await validateAdminAccess(request)
     console.log('🔑 Admin validation result:', authResult)
     
     if (!authResult.success) {
