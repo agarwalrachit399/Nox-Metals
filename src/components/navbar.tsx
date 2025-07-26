@@ -1,4 +1,4 @@
-// components/navbar.tsx - Updated with audit logs link
+// components/navbar.tsx
 'use client'
 
 import { useState } from 'react'
@@ -20,16 +20,14 @@ import { usePathname } from 'next/navigation'
 
 export default function Navbar() {
   const { user, signOut, loading: authLoading, role, isAdmin } = useAuth()
-  const [isSigningOut, setIsSigningOut] = useState(false)
   const pathname = usePathname()
 
   const handleSignOut = async () => {
-    setIsSigningOut(true)
     try {
       await signOut()
+      // Don't manage local state here - let AuthProvider handle it
     } catch (error) {
       console.error('Error signing out:', error)
-      setIsSigningOut(false)
     }
   }
 
@@ -129,7 +127,7 @@ export default function Navbar() {
                 <Button 
                   variant="ghost" 
                   className="relative h-10 w-10 rounded-full"
-                  disabled={isSigningOut}
+                  disabled={authLoading}
                 >
                   <Avatar className="h-10 w-10">
                     <AvatarImage src="" alt={user?.email || ''} />
@@ -192,14 +190,14 @@ export default function Navbar() {
                 <DropdownMenuItem
                   className="cursor-pointer text-destructive focus:text-destructive"
                   onClick={handleSignOut}
-                  disabled={isSigningOut}
+                  disabled={authLoading}
                 >
-                  {isSigningOut ? (
+                  {authLoading ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
                     <LogOut className="mr-2 h-4 w-4" />
                   )}
-                  <span>{isSigningOut ? 'Signing out...' : 'Sign out'}</span>
+                  <span>{authLoading ? 'Signing out...' : 'Sign out'}</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

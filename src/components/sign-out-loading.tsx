@@ -1,3 +1,4 @@
+// src/components/sign-out-loading.tsx
 'use client'
 
 import { Loader2, LogOut } from 'lucide-react'

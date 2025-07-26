@@ -48,6 +48,7 @@ export default function AuthProvider({ children }: AuthProviderProps) {
   const [role, setRole] = useState<UserRole | null>(null)
   const [loading, setLoading] = useState(true)
   const [initialized, setInitialized] = useState(false)
+  const [isSigningOut, setIsSigningOut] = useState(false)
   
   const router = useRouter()
   const pathname = usePathname()
@@ -62,14 +63,14 @@ export default function AuthProvider({ children }: AuthProviderProps) {
   // Auth pages and protected pages
   const authPages = ['/login', '/signup']
   const isAuthPage = authPages.includes(pathname)
-  const isProtectedPage = pathname === '/' || pathname.startsWith('/dashboard')
+  const isProtectedPage = pathname === '/' || pathname.startsWith('/dashboard') || pathname === '/audit-logs'
 
-  // Add debug logging
   console.log('🔄 AuthProvider render:', { 
     user: !!user, 
     role, 
     loading, 
     initialized, 
+    isSigningOut,
     pathname 
   })
 
@@ -139,6 +140,18 @@ export default function AuthProvider({ children }: AuthProviderProps) {
       async (event, session) => {
         console.log('🔔 Auth state changed:', event, !!session?.user)
         
+        // Handle sign out event specifically
+        if (event === 'SIGNED_OUT') {
+          console.log('👋 Sign out event detected')
+          setSession(null)
+          setUser(null)
+          setUserProfile(null)
+          setRole(null)
+          setIsSigningOut(false) // Reset signing out state
+          setLoading(false) // Important: Reset loading state
+          return
+        }
+        
         setSession(session)
         setUser(session?.user ?? null)
 
@@ -169,8 +182,8 @@ export default function AuthProvider({ children }: AuthProviderProps) {
 
   // Handle navigation (separate effect, only when auth state is stable)
   useEffect(() => {
-    // Skip navigation during loading or if not initialized
-    if (loading || !initialized) return
+    // Skip navigation during loading, initialization, or sign out process
+    if (loading || !initialized || isSigningOut) return
 
     const currentAuthState = {
       hasUser: !!user,
@@ -197,20 +210,27 @@ export default function AuthProvider({ children }: AuthProviderProps) {
     }
 
     lastAuthState.current = currentAuthState
-  }, [user, pathname, isAuthPage, isProtectedPage, loading, initialized, router])
+  }, [user, pathname, isAuthPage, isProtectedPage, loading, initialized, isSigningOut, router])
 
   const signOut = async () => {
     try {
-      console.log('👋 Signing out...')
+      console.log('👋 Starting sign out process...')
+      setIsSigningOut(true)
       setLoading(true)
+      
       const { error } = await supabase.auth.signOut()
       
       if (error) {
         console.error('❌ Error signing out:', error)
+        setIsSigningOut(false)
         setLoading(false)
+      } else {
+        console.log('✅ Sign out successful')
+        // Don't reset states here - let the auth listener handle it
       }
     } catch (error) {
       console.error('❌ Error in signOut:', error)
+      setIsSigningOut(false)
       setLoading(false)
     }
   }
