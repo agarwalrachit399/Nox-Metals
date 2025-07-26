@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { Search, SortAsc, SortDesc, Filter, ChevronLeft, ChevronRight, Plus, Edit, Trash2, Loader2, RefreshCw, Eye, Shield, AlertTriangle } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -37,7 +37,14 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null)
   
   // Get user role for access control
-  const { isAdmin, role, loading: authLoading } = useAuth()
+  const { isAdmin, role, loading: authLoading , user} = useAuth()
+ console.log('🏠 HomePage render:', { 
+    authLoading, 
+    role, 
+    user: !!user,
+    productsLength: products.length,
+    isLoading 
+  })
 
   // State for search/filter/sort
   const [searchTerm, setSearchTerm] = useState('')
@@ -55,36 +62,48 @@ export default function HomePage() {
   const [productToDelete, setProductToDelete] = useState<Product | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
 
+  const fetchingProducts = useRef(false)
+  const fetchingCategories = useRef(false)
+  const initialFetchDone = useRef(false)
+
   const itemsPerPage = 6
 
   // Fetch categories from API
   const fetchCategories = async () => {
-    // Don't fetch if user is not authenticated
-    if (authLoading || !role) {
+    // Prevent multiple simultaneous calls
+    if (fetchingCategories.current || authLoading || !role) {
+      console.log('⏭️ Skipping categories fetch:', { 
+        fetching: fetchingCategories.current, 
+        authLoading, 
+        role 
+      })
       return
     }
 
     try {
+      fetchingCategories.current = true
       setIsLoadingCategories(true)
+      console.log('📂 Fetching categories...')
+      
       const response = await fetch('/api/categories')
       
       if (response.ok) {
         const categoriesData = await response.json()
+        console.log('✅ Categories fetched:', categoriesData.length)
         setCategories(['all', ...categoriesData.map((cat: any) => cat.name)])
       } else if (response.status === 401 || response.status === 403) {
-        // Don't set error during sign out process - just use fallback
+        console.log('🔒 Categories access denied, using fallback')
         setCategories(['all', 'Electronics', 'Clothing', 'Health', 'Furniture', 'Home', 'Accessories'])
       } else {
-        console.error('Failed to fetch categories')
-        // Fallback to default categories
+        console.error('❌ Failed to fetch categories')
         setCategories(['all', 'Electronics', 'Clothing', 'Health', 'Furniture', 'Home', 'Accessories'])
       }
     } catch (error) {
-      console.error('Error fetching categories:', error)
-      // Fallback to default categories
+      console.error('❌ Error fetching categories:', error)
       setCategories(['all', 'Electronics', 'Clothing', 'Health', 'Furniture', 'Home', 'Accessories'])
     } finally {
       setIsLoadingCategories(false)
+      fetchingCategories.current = false
     }
   }
 
@@ -94,15 +113,22 @@ export default function HomePage() {
   }, [categories])
 
   // Fetch products from API
-  const fetchProducts = async () => {
-    // Don't fetch if user is not authenticated
-    if (authLoading || !role) {
+   const fetchProducts = async () => {
+    // Prevent multiple simultaneous calls
+    if (fetchingProducts.current || authLoading || !role) {
+      console.log('⏭️ Skipping products fetch:', { 
+        fetching: fetchingProducts.current, 
+        authLoading, 
+        role 
+      })
       return
     }
 
     try {
+      fetchingProducts.current = true
       setIsLoading(true)
       setError(null)
+      console.log('📦 Fetching products...')
 
       const searchParams = new URLSearchParams({
         page: currentPage.toString(),
@@ -117,7 +143,7 @@ export default function HomePage() {
       
       if (!response.ok) {
         if (response.status === 401) {
-          // Don't set error during sign out - just return
+          console.log('🔒 Products: Authentication required')
           return
         } else if (response.status === 403) {
           setError('Access denied. You do not have permission to view products.')
@@ -128,37 +154,47 @@ export default function HomePage() {
       }
 
       const data: ApiResponse = await response.json()
-      // Transform database format to legacy format for compatibility
+      console.log('✅ Products fetched:', data.products.length, 'total:', data.pagination.total)
+      
       const transformedProducts = data.products.map(transformProductFromDB)
       setProducts(transformedProducts)
       setTotalPages(data.pagination.totalPages)
       setTotalProducts(data.pagination.total)
     } catch (error) {
-      console.error('Error fetching products:', error)
-      // Don't set error if it's likely due to sign out
+      console.error('❌ Error fetching products:', error)
       if (role) {
         setError('Failed to load products. Please try again.')
       }
     } finally {
       setIsLoading(false)
+      fetchingProducts.current = false
     }
   }
 
-  // Fetch initial data
+
   useEffect(() => {
-    if (!authLoading && role) {
-      fetchCategories()
+    if (authLoading || !role || initialFetchDone.current) {
+      return
     }
+
+    console.log('🚀 Initial data fetch triggered')
+    initialFetchDone.current = true
+    
+    fetchCategories()
+    fetchProducts()
   }, [authLoading, role])
 
-  // Fetch products on component mount and when dependencies change
+  // Separate effect for filter/pagination changes
   useEffect(() => {
-    if (!authLoading && role) {
-      fetchProducts()
+    if (!initialFetchDone.current || authLoading || !role) {
+      return
     }
-  }, [currentPage, searchTerm, filterCategory, sortBy, showDeleted, authLoading, role])
 
-  // Reset to first page when filters change
+    console.log('🔄 Refetching due to filter changes')
+    fetchProducts()
+  }, [currentPage, searchTerm, filterCategory, sortBy, showDeleted])
+
+  // Reset to first page when filters change (keep existing)
   useEffect(() => {
     if (currentPage !== 1) {
       setCurrentPage(1)

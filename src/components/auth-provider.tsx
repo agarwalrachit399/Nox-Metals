@@ -1,7 +1,7 @@
 // components/auth-provider.tsx
 'use client'
 
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState, useRef } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { User, Session } from '@supabase/supabase-js'
 import { createClient } from '@/lib/auth'
@@ -37,12 +37,6 @@ export const useAuth = () => {
   return context
 }
 
-// Convenience hook for role checking
-export const useRole = () => {
-  const { role, isAdmin, isUser } = useAuth()
-  return { role, isAdmin, isUser }
-}
-
 interface AuthProviderProps {
   children: React.ReactNode
 }
@@ -53,19 +47,36 @@ export default function AuthProvider({ children }: AuthProviderProps) {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [role, setRole] = useState<UserRole | null>(null)
   const [loading, setLoading] = useState(true)
-  const [initialLoad, setInitialLoad] = useState(true)
+  const [initialized, setInitialized] = useState(false)
+  
   const router = useRouter()
   const pathname = usePathname()
   const supabase = createClient()
+  
+  // Use ref to prevent navigation loops
+  const lastAuthState = useRef<{ hasUser: boolean; pathname: string }>({ 
+    hasUser: false, 
+    pathname: '' 
+  })
 
   // Auth pages and protected pages
   const authPages = ['/login', '/signup']
   const isAuthPage = authPages.includes(pathname)
   const isProtectedPage = pathname === '/' || pathname.startsWith('/dashboard')
 
+  // Add debug logging
+  console.log('🔄 AuthProvider render:', { 
+    user: !!user, 
+    role, 
+    loading, 
+    initialized, 
+    pathname 
+  })
+
   // Fetch user profile and role
   const fetchUserProfile = async (userId: string) => {
     try {
+      console.log('📊 Fetching user profile for:', userId)
       const { data: profile, error } = await supabase
         .from('users')
         .select('*')
@@ -73,26 +84,31 @@ export default function AuthProvider({ children }: AuthProviderProps) {
         .single()
 
       if (error) {
-        console.error('Error fetching user profile:', error)
+        console.error('❌ Error fetching user profile:', error)
         return null
       }
 
+      console.log('✅ User profile fetched:', profile)
       return profile
     } catch (error) {
-      console.error('Error in fetchUserProfile:', error)
+      console.error('❌ Error in fetchUserProfile:', error)
       return null
     }
   }
 
+  // Initialize auth state once
   useEffect(() => {
-    // Get initial session
-    const getInitialSession = async () => {
+    if (initialized) return
+
+    const initializeAuth = async () => {
       try {
+        console.log('🚀 Initializing auth...')
         const { data: { session }, error } = await supabase.auth.getSession()
         
         if (error) {
-          console.error('Error getting session:', error)
+          console.error('❌ Error getting session:', error)
         } else {
+          console.log('📱 Initial session:', !!session?.user)
           setSession(session)
           setUser(session?.user ?? null)
 
@@ -104,78 +120,97 @@ export default function AuthProvider({ children }: AuthProviderProps) {
           }
         }
       } catch (error) {
-        console.error('Error in getInitialSession:', error)
+        console.error('❌ Error in initializeAuth:', error)
       } finally {
         setLoading(false)
-        setInitialLoad(false)
+        setInitialized(true)
+        console.log('✅ Auth initialization complete')
       }
     }
 
-    getInitialSession()
+    initializeAuth()
+  }, [initialized, supabase])
 
-    // Listen for auth changes
+  // Listen for auth changes (separate from initialization)
+  useEffect(() => {
+    console.log('👂 Setting up auth listener...')
+    
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth state changed:', event, session?.user?.email)
-        
-        const previousUser = user
-        const newUser = session?.user ?? null
+        console.log('🔔 Auth state changed:', event, !!session?.user)
         
         setSession(session)
-        setUser(newUser)
+        setUser(session?.user ?? null)
 
         // Handle user profile and role
-        if (newUser) {
-          // Only fetch profile if this is a real sign in (not sign out cleanup)
+        if (session?.user) {
           if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-            const profile = await fetchUserProfile(newUser.id)
+            const profile = await fetchUserProfile(session.user.id)
             setUserProfile(profile)
             setRole(profile?.role ?? null)
           }
         } else {
-          // Clear profile and role immediately on sign out
           setUserProfile(null)
           setRole(null)
         }
 
-        setLoading(false)
-
-        // Only handle navigation after initial load and on actual auth state changes
-        if (!initialLoad) {
-          if (event === 'SIGNED_IN' && newUser && !previousUser) {
-            // User just signed in - redirect to home if on auth page
-            if (isAuthPage) {
-              console.log('User signed in, redirecting to home')
-              router.push('/')
-            }
-          } else if (event === 'SIGNED_OUT' && !newUser && previousUser) {
-            // User just signed out - redirect to login if on protected page
-            if (isProtectedPage) {
-              console.log('User signed out, redirecting to login')
-              router.push('/login')
-            }
-          }
+        // Only set loading to false after handling the auth change
+        if (event !== 'TOKEN_REFRESHED') {
+          setLoading(false)
         }
       }
     )
 
     return () => {
+      console.log('🧹 Cleaning up auth listener')
       subscription?.unsubscribe()
     }
-  }, [supabase, router, pathname, isAuthPage, isProtectedPage, initialLoad, user])
+  }, [supabase])
+
+  // Handle navigation (separate effect, only when auth state is stable)
+  useEffect(() => {
+    // Skip navigation during loading or if not initialized
+    if (loading || !initialized) return
+
+    const currentAuthState = {
+      hasUser: !!user,
+      pathname
+    }
+
+    // Prevent navigation loops
+    if (
+      currentAuthState.hasUser === lastAuthState.current.hasUser &&
+      currentAuthState.pathname === lastAuthState.current.pathname
+    ) {
+      return
+    }
+
+    console.log('🧭 Navigation check:', currentAuthState)
+
+    // Handle redirects
+    if (!user && isProtectedPage) {
+      console.log('➡️ Redirecting to login')
+      router.push('/login')
+    } else if (user && isAuthPage) {
+      console.log('➡️ Redirecting to home')
+      router.push('/')
+    }
+
+    lastAuthState.current = currentAuthState
+  }, [user, pathname, isAuthPage, isProtectedPage, loading, initialized, router])
 
   const signOut = async () => {
     try {
+      console.log('👋 Signing out...')
       setLoading(true)
       const { error } = await supabase.auth.signOut()
       
       if (error) {
-        console.error('Error signing out:', error)
+        console.error('❌ Error signing out:', error)
         setLoading(false)
       }
-      // Auth state change listener will handle the redirect and cleanup
     } catch (error) {
-      console.error('Error in signOut:', error)
+      console.error('❌ Error in signOut:', error)
       setLoading(false)
     }
   }
