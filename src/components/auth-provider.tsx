@@ -1,4 +1,4 @@
-// components/auth-provider.tsx - Enhanced with failure handling
+// components/auth-provider.tsx - Fixed race condition
 'use client'
 
 import { createContext, useContext, useEffect, useState, useRef } from 'react'
@@ -59,6 +59,8 @@ export default function AuthProvider({ children }: AuthProviderProps) {
   const [isSigningOut, setIsSigningOut] = useState(false)
   const [initRetryCount, setInitRetryCount] = useState(0)
   const [authError, setAuthError] = useState<AuthError | null>(null)
+  // NEW: Track if we're waiting for role to be fetched
+  const [roleLoading, setRoleLoading] = useState(false)
   
   const router = useRouter()
   const pathname = usePathname()
@@ -83,6 +85,7 @@ export default function AuthProvider({ children }: AuthProviderProps) {
     user: !!user, 
     role, 
     loading, 
+    roleLoading, // NEW: Log role loading state
     initialized, 
     initRetryCount,
     isSigningOut,
@@ -158,6 +161,7 @@ export default function AuthProvider({ children }: AuthProviderProps) {
     setUserProfile(null)
     setRole(null)
     setLoading(false)
+    setRoleLoading(false) // NEW: Clear role loading
     setIsSigningOut(false)
     
     // Clear cache
@@ -166,9 +170,6 @@ export default function AuthProvider({ children }: AuthProviderProps) {
     // Reset refresh tracking
     refreshAttempts.current = 0
     refreshCooldown.current = 0
-    
-    // Don't call supabase.auth.signOut() to avoid potential loops
-    // Just clean up local state and redirect
   }
 
   // Listen for auth errors
@@ -188,9 +189,13 @@ export default function AuthProvider({ children }: AuthProviderProps) {
     return unsubscribe
   }, [])
 
-  // Fetch user profile and role
-  const fetchUserProfile = async (userId: string) => {
+  // Fetch user profile and role - UPDATED to handle loading state
+  const fetchUserProfile = async (userId: string, setLoadingState: boolean = true) => {
     try {
+      if (setLoadingState) {
+        setRoleLoading(true) // NEW: Set role loading when starting fetch
+      }
+      
       console.log('📊 Fetching user profile for:', userId)
       const { data: profile, error } = await supabase
         .from('users')
@@ -208,7 +213,34 @@ export default function AuthProvider({ children }: AuthProviderProps) {
     } catch (error) {
       console.error('❌ Error in fetchUserProfile:', error)
       return null
+    } finally {
+      if (setLoadingState) {
+        setRoleLoading(false) // NEW: Clear role loading when done
+      }
     }
+  }
+
+  // UPDATED: Helper function to update auth state atomically
+  const updateAuthState = async (session: Session | null, shouldFetchProfile: boolean = true) => {
+    console.log('🔄 Updating auth state:', { hasSession: !!session, shouldFetchProfile })
+    
+    setSession(session)
+    const sessionUser = session?.user ?? null
+    setUser(sessionUser)
+
+    if (sessionUser && shouldFetchProfile) {
+      // Keep overall loading true while fetching profile
+      const profile = await fetchUserProfile(sessionUser.id, true)
+      setUserProfile(profile)
+      setRole(profile?.role ?? null)
+    } else {
+      setUserProfile(null)
+      setRole(null)
+      setRoleLoading(false)
+    }
+    
+    // Only set loading to false after everything is done
+    setLoading(false)
   }
 
   // Robust initialization with retry logic
@@ -229,23 +261,13 @@ export default function AuthProvider({ children }: AuthProviderProps) {
       }
       
       console.log('📱 Initial session:', !!session?.user)
-      setSession(session)
-      setUser(session?.user ?? null)
-
-      // Fetch user profile if authenticated
-      if (session?.user) {
-        const profile = await fetchUserProfile(session.user.id)
-        setUserProfile(profile)
-        setRole(profile?.role ?? null)
-      } else {
-        setUserProfile(null)
-        setRole(null)
-      }
+      
+      // UPDATED: Use atomic state update
+      await updateAuthState(session)
       
       // Success - reset retry count and mark as initialized
       setInitRetryCount(0)
       setInitialized(true)
-      setLoading(false)
       console.log('✅ Auth initialization successful')
       
     } catch (error) {
@@ -267,6 +289,7 @@ export default function AuthProvider({ children }: AuthProviderProps) {
         )
         setInitialized(true) // Stop retrying
         setLoading(false) // Allow app to continue (logged out state)
+        setRoleLoading(false) // NEW: Clear role loading
         setInitRetryCount(0)
       }
     }
@@ -279,7 +302,7 @@ export default function AuthProvider({ children }: AuthProviderProps) {
     initializeAuth()
   }, [initialized])
 
-  // Listen for auth changes with enhanced failure handling
+  // Listen for auth changes with enhanced failure handling - UPDATED
   useEffect(() => {
     if (!initialized) return // Wait for initialization
     
@@ -305,6 +328,7 @@ export default function AuthProvider({ children }: AuthProviderProps) {
             setRole(null)
             setIsSigningOut(false)
             setLoading(false)
+            setRoleLoading(false) // NEW
             // Reset refresh tracking
             refreshAttempts.current = 0
             refreshCooldown.current = 0
@@ -313,15 +337,8 @@ export default function AuthProvider({ children }: AuthProviderProps) {
             
           case 'SIGNED_IN':
             console.log('🔑 Sign in event detected')
-            setSession(session)
-            setUser(session?.user ?? null)
-            
-            if (session?.user) {
-              const profile = await fetchUserProfile(session.user.id)
-              setUserProfile(profile)
-              setRole(profile?.role ?? null)
-            }
-            setLoading(false)
+            // UPDATED: Use atomic state update - this prevents the race condition!
+            await updateAuthState(session)
             // Reset refresh tracking on successful sign in
             refreshAttempts.current = 0
             refreshCooldown.current = 0
@@ -352,30 +369,14 @@ export default function AuthProvider({ children }: AuthProviderProps) {
             
           case 'USER_UPDATED':
             console.log('👤 User update event detected')
-            setSession(session)
-            setUser(session?.user ?? null)
-            
-            if (session?.user) {
-              const profile = await fetchUserProfile(session.user.id)
-              setUserProfile(profile)
-              setRole(profile?.role ?? null)
-            }
+            // UPDATED: Use atomic state update
+            await updateAuthState(session)
             break
             
           default:
             console.log('❓ Unknown auth event:', event)
-            setSession(session)
-            setUser(session?.user ?? null)
-            
-            if (session?.user) {
-              const profile = await fetchUserProfile(session.user.id)
-              setUserProfile(profile)
-              setRole(profile?.role ?? null)
-            } else {
-              setUserProfile(null)
-              setRole(null)
-            }
-            setLoading(false)
+            // UPDATED: Use atomic state update
+            await updateAuthState(session)
         }
       }
     )
@@ -386,14 +387,27 @@ export default function AuthProvider({ children }: AuthProviderProps) {
     }
   }, [initialized])
 
-  // Handle navigation (separate effect, only when auth state is stable)
+  // Handle navigation (separate effect, only when auth state is stable) - UPDATED
   useEffect(() => {
-    // Skip navigation during loading, initialization, or sign out process
-    if (loading || !initialized || isSigningOut) return
+    // UPDATED: Also wait for roleLoading to complete for protected pages
+    const isRoleRequired = pathname === '/audit-logs' // Pages that need role info
+    const shouldWaitForRole = isRoleRequired && user && roleLoading
+    
+    if (loading || !initialized || isSigningOut || shouldWaitForRole) {
+      console.log('⏭️ Navigation: Waiting for auth state', { 
+        loading, 
+        initialized, 
+        isSigningOut, 
+        shouldWaitForRole,
+        roleLoading 
+      })
+      return
+    }
 
     const currentAuthState = {
       hasUser: !!user,
-      pathname
+      pathname,
+      role
     }
 
     console.log('🧭 Navigation check:', currentAuthState)
@@ -406,7 +420,7 @@ export default function AuthProvider({ children }: AuthProviderProps) {
       console.log('➡️ Redirecting to home')
       router.push('/')
     }
-  }, [user, pathname, isAuthPage, isProtectedPage, loading, initialized, isSigningOut, router])
+  }, [user, role, pathname, isAuthPage, isProtectedPage, loading, initialized, isSigningOut, roleLoading, router])
 
   const signOut = async () => {
     try {
@@ -438,12 +452,15 @@ export default function AuthProvider({ children }: AuthProviderProps) {
   const isAdmin = role === 'Admin'
   const isUser = role === 'User'
 
-  const value = {
+  // UPDATED: Include roleLoading in the overall loading state for role-sensitive pages
+  const effectiveLoading = Boolean(loading || (user && roleLoading && pathname === '/audit-logs'))
+
+  const value: AuthContextType = {
     user,
     session,
     userProfile,
     role,
-    loading,
+    loading: effectiveLoading, // UPDATED: Use effective loading
     signOut,
     isAdmin,
     isUser,
