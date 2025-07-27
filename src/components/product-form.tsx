@@ -1,5 +1,5 @@
 "use client";
-
+import Image from "next/image";
 import React, { useState, useEffect } from "react";
 import { Loader2, ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { type LegacyProduct } from "@/lib/dummy-data";
+import { Category, type LegacyProduct } from "@/lib/dummy-data";
 
 // Use LegacyProduct type for backward compatibility
 type Product = LegacyProduct;
@@ -79,7 +79,7 @@ export default function ProductForm({
         const response = await fetch("/api/categories");
         if (response.ok) {
           const categoriesData = await response.json();
-          setCategories(categoriesData.map((cat: any) => cat.name));
+          setCategories(categoriesData.map((cat: Category) => cat.name));
         } else {
           console.error("Failed to fetch categories");
           // Fallback to default categories
@@ -352,9 +352,11 @@ export default function ProductForm({
               </div>
               {formData.image && isValidUrl(formData.image) && (
                 <div className="w-12 h-12 border rounded-md overflow-hidden bg-muted flex items-center justify-center">
-                  <img
+                  <Image
                     src={formData.image}
                     alt="Preview"
+                    width={48}
+                    height={48}
                     className="w-full h-full object-cover"
                     onError={(e) => {
                       e.currentTarget.style.display = "none";

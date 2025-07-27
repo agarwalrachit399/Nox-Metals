@@ -3,7 +3,7 @@
 
 import { createContext, useContext, useEffect, useState, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { User, Session } from "@supabase/supabase-js";
+import type { User, Session } from "@supabase/supabase-js";
 import { createClient } from "@/lib/auth";
 import { UserRole, UserProfile } from "@/lib/database.types";
 import { authCache } from "@/lib/auth-cache";
@@ -57,9 +57,7 @@ export default function AuthProvider({ children }: AuthProviderProps) {
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
-  const [initRetryCount, setInitRetryCount] = useState(0);
   const [authError, setAuthError] = useState<AuthError | null>(null);
-  // NEW: Track if we're waiting for role to be fetched
   const [roleLoading, setRoleLoading] = useState(false);
 
   const router = useRouter();
@@ -121,7 +119,7 @@ export default function AuthProvider({ children }: AuthProviderProps) {
         );
 
         // If refresh fails, force logout
-        await forceCleanLogout("Session refresh failed");
+        await forceCleanLogout();
         return false;
       }
 
@@ -138,7 +136,7 @@ export default function AuthProvider({ children }: AuthProviderProps) {
   };
 
   // Force clean logout on auth failures
-  const forceCleanLogout = async (reason: string) => {
+  const forceCleanLogout = async () => {
     // Clear all auth state
     setSession(null);
     setUser(null);
@@ -167,7 +165,7 @@ export default function AuthProvider({ children }: AuthProviderProps) {
         error.type === AuthErrorType.INVALID_SESSION
       ) {
         setTimeout(() => {
-          forceCleanLogout(`Auth error: ${error.type}`);
+          forceCleanLogout();
         }, 2000); // Give user time to see the error
       }
     });
@@ -255,12 +253,10 @@ export default function AuthProvider({ children }: AuthProviderProps) {
       await updateAuthState(session);
 
       // Success - reset retry count and mark as initialized
-      setInitRetryCount(0);
       setInitialized(true);
-    } catch (error) {
+    } catch {
       if (retryCount < MAX_INIT_RETRIES) {
         // Retry after delay
-        setInitRetryCount(retryCount + 1);
         setTimeout(
           () => {
             initializeAuth(retryCount + 1);
@@ -276,7 +272,6 @@ export default function AuthProvider({ children }: AuthProviderProps) {
         setInitialized(true); // Stop retrying
         setLoading(false); // Allow app to continue (logged out state)
         setRoleLoading(false); // NEW: Clear role loading
-        setInitRetryCount(0);
       }
     }
   };
@@ -332,7 +327,7 @@ export default function AuthProvider({ children }: AuthProviderProps) {
               AuthErrorType.REFRESH_FAILED,
               "Token refresh returned empty session",
             );
-            await forceCleanLogout("Token refresh failed");
+            await forceCleanLogout();
             break;
           }
 
@@ -369,12 +364,6 @@ export default function AuthProvider({ children }: AuthProviderProps) {
       return;
     }
 
-    const currentAuthState = {
-      hasUser: !!user,
-      pathname,
-      role,
-    };
-
     // Handle redirects
     if (!user && isProtectedPage) {
       router.push("/login");
@@ -407,14 +396,14 @@ export default function AuthProvider({ children }: AuthProviderProps) {
       if (error) {
         console.error("❌ Error signing out:", error);
         // Even if signOut fails, force clean logout
-        await forceCleanLogout("Sign out error");
+        await forceCleanLogout();
       } else {
         // Don't reset states here - let the auth listener handle it
       }
     } catch (error) {
       console.error("❌ Error in signOut:", error);
       // Force clean logout on error
-      await forceCleanLogout("Sign out exception");
+      await forceCleanLogout();
     }
   };
 

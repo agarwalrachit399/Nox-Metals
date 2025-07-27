@@ -1,7 +1,7 @@
 // src/app/audit-logs/page.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   History,
   Filter,
@@ -34,7 +34,7 @@ interface AuditLog {
   table_name: string;
   record_id: number;
   user_email: string | null;
-  changes: any;
+  changes: Record<string, unknown> | null;
   timestamp: string;
 }
 
@@ -66,7 +66,7 @@ export default function AuditLogsPage() {
   const itemsPerPage = 20;
 
   // Fetch audit logs from API
-  const fetchAuditLogs = async () => {
+  const fetchAuditLogs = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
@@ -101,18 +101,19 @@ export default function AuditLogsPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [currentPage, actionFilter, tableFilter, startDate, endDate]);
 
   // Fetch logs on component mount and when filters change
   useEffect(() => {
     fetchAuditLogs();
-  }, [currentPage, actionFilter, tableFilter, startDate, endDate]);
+  }, [fetchAuditLogs]);
 
   // Reset to first page when filters change
   useEffect(() => {
     if (currentPage !== 1) {
       setCurrentPage(1);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actionFilter, tableFilter, startDate, endDate]);
 
   // Handle pagination
@@ -153,7 +154,7 @@ export default function AuditLogsPage() {
   };
 
   // Format changes for display
-  const formatChanges = (changes: any) => {
+  const formatChanges = (changes: Record<string, unknown> | null) => {
     if (!changes) return "No changes recorded";
 
     try {

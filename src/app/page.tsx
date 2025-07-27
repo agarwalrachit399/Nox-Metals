@@ -1,5 +1,5 @@
 "use client";
-
+import Image from "next/image";
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import {
   Search,
@@ -46,11 +46,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { type LegacyProduct, transformProductFromDB } from "@/lib/dummy-data";
+import {
+  Category,
+  type LegacyProduct,
+  transformProductFromDB,
+} from "@/lib/dummy-data";
 import ProductForm from "@/components/product-form";
 import AuthGuard from "@/components/auth-guard";
 import Navbar from "@/components/navbar";
 import { useAuth } from "@/components/auth-provider";
+import { Product as DBProduct } from "@/lib/database.types";
 
 type Product = LegacyProduct;
 type SortOption =
@@ -61,7 +66,7 @@ type SortOption =
   | "createdAt-desc";
 
 interface ApiResponse {
-  products: any[]; // Raw database format
+  products: DBProduct[]; // Raw database format
   pagination: {
     page: number;
     limit: number;
@@ -75,11 +80,10 @@ export default function HomePage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingCategories, setIsLoadingCategories] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Get user role for access control
-  const { isAdmin, role, loading: authLoading, user } = useAuth();
+  const { isAdmin, role, loading: authLoading } = useAuth();
 
   // State for search/filter/sort
   const [searchTerm, setSearchTerm] = useState("");
@@ -112,13 +116,15 @@ export default function HomePage() {
 
     try {
       fetchingCategories.current = true;
-      setIsLoadingCategories(true);
 
       const response = await fetch("/api/categories");
 
       if (response.ok) {
         const categoriesData = await response.json();
-        setCategories(["all", ...categoriesData.map((cat: any) => cat.name)]);
+        setCategories([
+          "all",
+          ...categoriesData.map((cat: Category) => cat.name),
+        ]);
       } else if (response.status === 401 || response.status === 403) {
         setCategories([
           "all",
@@ -153,7 +159,6 @@ export default function HomePage() {
         "Accessories",
       ]);
     } finally {
-      setIsLoadingCategories(false);
       fetchingCategories.current = false;
     }
   };
@@ -501,7 +506,7 @@ export default function HomePage() {
                 <Card key={product.id} className="flex flex-col">
                   <CardHeader className="pb-3">
                     <div className="aspect-video w-full bg-muted rounded-md mb-3 overflow-hidden">
-                      <img
+                      <Image
                         src={product.image ?? ""}
                         alt={product.name}
                         className="w-full h-full object-cover"

@@ -41,23 +41,15 @@ export function transformProductFromDB(dbProduct: Product): LegacyProduct {
 
 export function transformProductToDB(
   legacyProduct: Partial<LegacyProduct>,
-): any {
-  const dbProduct: any = { ...legacyProduct };
+): Partial<ProductInsert> {
+  const { isDeleted, createdAt, updatedAt, ...rest } = legacyProduct;
 
-  if ("isDeleted" in dbProduct) {
-    dbProduct.is_deleted = dbProduct.isDeleted;
-    delete dbProduct.isDeleted;
-  }
-
-  if ("createdAt" in dbProduct) {
-    dbProduct.created_at = dbProduct.createdAt;
-    delete dbProduct.createdAt;
-  }
-
-  if ("updatedAt" in dbProduct) {
-    dbProduct.updated_at = dbProduct.updatedAt;
-    delete dbProduct.updatedAt;
-  }
+  const dbProduct: Partial<ProductInsert> = {
+    ...rest,
+    ...(isDeleted !== undefined && { is_deleted: isDeleted }),
+    ...(createdAt !== undefined && { created_at: createdAt }),
+    ...(updatedAt !== undefined && { updated_at: updatedAt }),
+  };
 
   return dbProduct;
 }

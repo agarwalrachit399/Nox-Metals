@@ -1,7 +1,7 @@
 // lib/auth.ts
 import { createBrowserClient, createServerClient } from "@supabase/ssr";
 import { Database } from "./database.types";
-import { supabase } from "./supabase";
+import { cookies } from "next/headers";
 
 // Client-side Supabase client for components
 export const createClient = () => {
@@ -12,7 +12,9 @@ export const createClient = () => {
 };
 
 // Server-side Supabase client for server components and API routes
-export const createServerSupabaseClient = async (cookieStore: any) => {
+export const createServerSupabaseClient = async (
+  cookieStore: Awaited<ReturnType<typeof cookies>>,
+) => {
   return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -37,7 +39,9 @@ export const createServerSupabaseClient = async (cookieStore: any) => {
   );
 };
 // Auth helper functions
-export const getUser = async (cookieStore: any) => {
+export const getUser = async (
+  cookieStore: Awaited<ReturnType<typeof cookies>>,
+) => {
   const supabase = await createServerSupabaseClient(cookieStore);
   const {
     data: { user },
@@ -51,11 +55,9 @@ export const getUser = async (cookieStore: any) => {
 
   return user;
 };
-const {
-  data: { session },
-  error,
-} = await supabase.auth.getSession();
-export const getSession = async (cookieStore: any) => {
+export const getSession = async (
+  cookieStore: Awaited<ReturnType<typeof cookies>>,
+) => {
   const supabase = await createServerSupabaseClient(cookieStore);
   const {
     data: { session },

@@ -120,7 +120,7 @@ class ApiClient {
 
   async post<T>(
     endpoint: string,
-    data?: any,
+    data?: unknown,
     options?: ApiOptions,
   ): Promise<T> {
     return this.request<T>(endpoint, {
@@ -130,7 +130,11 @@ class ApiClient {
     });
   }
 
-  async put<T>(endpoint: string, data?: any, options?: ApiOptions): Promise<T> {
+  async put<T>(
+    endpoint: string,
+    data?: unknown,
+    options?: ApiOptions,
+  ): Promise<T> {
     return this.request<T>(endpoint, {
       ...options,
       method: "PUT",
@@ -148,10 +152,11 @@ export const apiClient = new ApiClient();
 
 // Hook for automatic refresh handling
 export const useApiErrorRecovery = () => {
+  const { refreshSession } = useAuth(); // Move this to top level
+
   useEffect(() => {
     const handleRefreshNeeded = async () => {
-      // This would trigger AuthProvider's refreshSession
-      const { refreshSession } = useAuth();
+      // Now use the refreshSession from the hook scope
       await refreshSession();
     };
 
@@ -160,5 +165,5 @@ export const useApiErrorRecovery = () => {
     return () => {
       window.removeEventListener("auth:refresh-needed", handleRefreshNeeded);
     };
-  }, []);
+  }, [refreshSession]); // Add refreshSession to dependencies
 };

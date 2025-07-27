@@ -25,7 +25,7 @@ export const createServerSupabaseClient = async () => {
               cookiesToSet.forEach(({ name, value, options }) => {
                 cookieStore.set(name, value, options);
               });
-            } catch (error) {}
+            } catch {}
           },
         },
       },
@@ -265,6 +265,6 @@ export const createErrorResponse = (
   return new Response(JSON.stringify(response), { status, headers });
 };
 
-export const createSuccessResponse = (data: any, status: number = 200) => {
+export const createSuccessResponse = <T>(data: T, status: number = 200) => {
   return Response.json(data, { status });
 };

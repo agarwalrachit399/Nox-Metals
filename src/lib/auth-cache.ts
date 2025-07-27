@@ -1,6 +1,8 @@
+import type { User } from "@supabase/supabase-js";
+
 // src/lib/auth-cache.ts
 interface CachedAuthState {
-  user: any | null;
+  user: User | null;
   timestamp: number;
   expiresAt: number;
 }
@@ -35,7 +37,7 @@ class AuthCache {
     return cached;
   }
 
-  set(cookies: string, user: any | null): void {
+  set(cookies: string, user: User | null): void {
     const key = this.generateKey(cookies);
     const now = Date.now();
 
