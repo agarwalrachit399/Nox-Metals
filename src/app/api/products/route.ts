@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
     })
     
     // Validate required fields
-    if (!body.name?.trim() || !body.price || !body.description?.trim() || !body.category?.trim()) {
+    if (!body.name?.trim() || body.price == null || !body.description?.trim() || !body.category?.trim()) {
       console.log('❌ Missing required fields')
       return createErrorResponse('Missing required fields: name, price, description, category', 400)
     }

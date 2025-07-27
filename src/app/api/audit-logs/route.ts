@@ -21,8 +21,8 @@ export async function GET(request: NextRequest) {
     console.log('🔌 Created authenticated client for audit logs')
 
     const { searchParams } = request.nextUrl
-    const page = parseInt(searchParams.get('page') || '1')
-    const limit = parseInt(searchParams.get('limit') || '20')
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1') || 1)
+    const limit = Math.max(1, Math.min(100, parseInt(searchParams.get('limit') || '20') || 20))
     const action = searchParams.get('action') // Filter by action
     const tableName = searchParams.get('table') // Filter by table
     const startDate = searchParams.get('startDate') // Filter by date range

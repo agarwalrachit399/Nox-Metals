@@ -25,9 +25,9 @@ export async function GET(
     const { id } = await params
     const productId = parseInt(id)
     
-    if (isNaN(productId)) {
-      return createErrorResponse('Invalid product ID', 400)
-    }
+    if (isNaN(productId) || productId <= 0 || !Number.isInteger(Number(id))) {
+  return createErrorResponse('Invalid product ID', 400)
+}
 
     console.log('🔍 Fetching product:', productId)
     const { data: product, error } = await supabase
@@ -75,9 +75,9 @@ export async function PUT(
     const { id } = await params
     const productId = parseInt(id)
     
-    if (isNaN(productId)) {
-      return createErrorResponse('Invalid product ID', 400)
-    }
+    if (isNaN(productId) || productId <= 0 || !Number.isInteger(Number(id))) {
+  return createErrorResponse('Invalid product ID', 400)
+}
 
     const body = await request.json()
     console.log('📋 Product update data:', {
@@ -122,16 +122,21 @@ export async function PUT(
 
     // Validate category exists if it's being updated
     if (body.category !== undefined) {
-      const { data: categoryExists } = await supabase
-        .from('categories')
-        .select('name')
-        .eq('name', body.category.trim())
-        .single()
+  const { data: categoryExists, error: categoryError } = await supabase
+    .from('categories')
+    .select('name')
+    .eq('name', body.category.trim())
+    .single()
 
-      if (!categoryExists) {
-        return createErrorResponse('Invalid category. Please select a valid category.', 400)
-      }
-    }
+  if (categoryError?.code === 'PGRST116' || !categoryExists) {
+    return createErrorResponse('Invalid category. Please select a valid category.', 400)
+  }
+  
+  if (categoryError) {
+    console.error('❌ Error checking category:', categoryError)
+    return createErrorResponse('Failed to validate category', 500)
+  }
+}
 
     // Build update data
     const updateData: ProductUpdate = {}
@@ -193,9 +198,9 @@ export async function DELETE(
     const { id } = await params
     const productId = parseInt(id)
     
-    if (isNaN(productId)) {
-      return createErrorResponse('Invalid product ID', 400)
-    }
+    if (isNaN(productId) || productId <= 0 || !Number.isInteger(Number(id))) {
+  return createErrorResponse('Invalid product ID', 400)
+}
 
     const { searchParams } = request.nextUrl
     const hardDelete = searchParams.get('hard') === 'true'
