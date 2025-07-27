@@ -534,6 +534,8 @@ export default function HomePage() {
                         src={product.image ?? ""}
                         alt={product.name}
                         className="w-full h-full object-cover"
+                        width={300}
+                        height={200}
                       />
                     </div>
                     <div className="flex items-start justify-between">
