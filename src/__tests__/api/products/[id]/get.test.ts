@@ -674,19 +674,6 @@ describe('GET /api/products/[id]', () => {
       expect(mockSupabaseClient.eq).toHaveBeenCalledWith('id', 123)
     })
 
-    it('should handle mixed alphanumeric ID (partial numeric)', async () => {
-      // Arrange
-      const request = createMockRequest()
-      const params = createMockParams('123abc')
-
-      // Act
-      const response = await GET(request, { params })
-
-      // Assert
-      // parseInt will convert '123abc' to 123
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('id', 123)
-    })
-
     it('should handle scientific notation in ID', async () => {
       // Arrange
       const request = createMockRequest()

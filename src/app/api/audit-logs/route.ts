@@ -22,7 +22,8 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = request.nextUrl
     const page = Math.max(1, parseInt(searchParams.get('page') || '1') || 1)
-    const limit = Math.max(1, Math.min(100, parseInt(searchParams.get('limit') || '20') || 20))
+    const limitParam = parseInt(searchParams.get('limit') || '20')
+    const limit = (limitParam > 0 && limitParam <= 100) ? limitParam : 20
     const action = searchParams.get('action') // Filter by action
     const tableName = searchParams.get('table') // Filter by table
     const startDate = searchParams.get('startDate') // Filter by date range

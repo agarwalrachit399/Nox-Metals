@@ -127,14 +127,12 @@ export async function PUT(
     .select('name')
     .eq('name', body.category.trim())
     .single()
-
-  if (categoryError?.code === 'PGRST116' || !categoryExists) {
+  if (categoryError?.code === 'PGRST116') {
     return createErrorResponse('Invalid category. Please select a valid category.', 400)
   }
   
-  if (categoryError) {
-    console.error('❌ Error checking category:', categoryError)
-    return createErrorResponse('Failed to validate category', 500)
+  if (categoryError || !categoryExists) {
+    return createErrorResponse('Invalid category. Please select a valid category.', 400)
   }
 }
 
@@ -199,12 +197,8 @@ export async function DELETE(
     const productId = parseInt(id)
     
     if (isNaN(productId) || productId <= 0 || !Number.isInteger(Number(id))) {
-  return createErrorResponse('Invalid product ID', 400)
-}
-
-    const { searchParams } = request.nextUrl
-    const hardDelete = searchParams.get('hard') === 'true'
-    console.log('🗑️ Delete type:', hardDelete ? 'hard' : 'soft')
+      return createErrorResponse('Invalid product ID', 400)
+    }
 
     // Check if product exists
     const { data: existingProduct, error: fetchError } = await supabase
@@ -221,48 +215,28 @@ export async function DELETE(
       return createErrorResponse('Failed to fetch product', 500)
     }
 
-    if (hardDelete) {
-      console.log('🚀 Performing hard delete...')
-      // Hard delete - remove from database
-      const { error: deleteError } = await supabase
-        .from('products')
-        .delete()
-        .eq('id', productId)
-
-      if (deleteError) {
-        console.error('❌ Error hard deleting product:', deleteError)
-        return createErrorResponse('Failed to delete product', 500)
-      }
-
-      console.log('✅ Product hard deleted successfully:', productId)
-      return NextResponse.json({ 
-        message: 'Product permanently deleted',
-        product: existingProduct
+    console.log('🚀 Performing soft delete...')
+    // Soft delete - mark as deleted
+    const { data: updatedProduct, error: updateError } = await supabase
+      .from('products')
+      .update({ 
+        is_deleted: true,
+        updated_at: new Date().toISOString()
       })
-    } else {
-      console.log('🚀 Performing soft delete...')
-      // Soft delete - mark as deleted
-      const { data: updatedProduct, error: updateError } = await supabase
-        .from('products')
-        .update({ 
-          is_deleted: true,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', productId)
-        .select()
-        .single()
+      .eq('id', productId)
+      .select()
+      .single()
 
-      if (updateError) {
-        console.error('❌ Error soft deleting product:', updateError)
-        return createErrorResponse('Failed to delete product', 500)
-      }
-      
-      console.log('✅ Product soft deleted successfully:', productId)
-      return NextResponse.json({
-        message: 'Product soft deleted',
-        product: updatedProduct
-      })
+    if (updateError) {
+      console.error('❌ Error soft deleting product:', updateError)
+      return createErrorResponse('Failed to delete product', 500)
     }
+    
+    console.log('✅ Product soft deleted successfully:', productId)
+    return NextResponse.json({
+      message: 'Product deleted successfully',
+      product: updatedProduct
+    })
   } catch (error) {
     console.error('💥 Error in product DELETE:', error)
     return createErrorResponse('Failed to delete product', 500)

@@ -400,24 +400,22 @@ describe('PUT /api/products/[id]', () => {
         // Assert
         expect(createErrorResponse).toHaveBeenCalledWith('Category cannot be empty', 400)
       })
-
-      it('should return 400 when category does not exist', async () => {
-        // Arrange
-        mockSupabaseClient.single.mockResolvedValueOnce(mockExistingProductResponse())
-        mockSupabaseClient.single.mockResolvedValueOnce({
-          data: null,
-          error: null
+        it('should return 400 when category does not exist', async () => {
+            // Arrange
+            mockSupabaseClient.single.mockResolvedValueOnce({
+            data: null,
+            error: { code: 'PGRST116' } // No rows returned
+            })
+    
+            const request = createMockRequest({ category: 'NonExistentCategory' })
+            const params = createMockParams('1')
+    
+            // Act
+            const response = await PUT(request, { params })
+    
+            // Assert
+            expect(createErrorResponse).toHaveBeenCalledWith('Invalid category. Please select a valid category.', 400)
         })
-
-        const request = createMockRequest({ category: 'NonexistentCategory' })
-        const params = createMockParams('1')
-
-        // Act
-        const response = await PUT(request, { params })
-
-        // Assert
-        expect(createErrorResponse).toHaveBeenCalledWith('Invalid category. Please select a valid category.', 400)
-      })
 
       it('should accept valid existing category', async () => {
         // Arrange

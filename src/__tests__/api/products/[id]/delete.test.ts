@@ -320,7 +320,7 @@ describe('DELETE /api/products/[id]', () => {
       expect(mockSupabaseClient.delete).not.toHaveBeenCalled()
       
       expect(response.status).toBe(200)
-      expect(responseData.message).toBe('Product soft deleted')
+      expect(responseData.message).toBe('Product deleted successfully')
       expect(responseData.product).toEqual(updatedProduct)
     })
 
@@ -398,140 +398,6 @@ describe('DELETE /api/products/[id]', () => {
     })
   })
 
-  describe('Hard Delete', () => {
-    beforeEach(() => {
-      mockExistingProduct()
-    })
-
-    it('should perform hard delete when hard=true', async () => {
-      // Arrange
-      mockHardDeleteSuccess()
-
-      const request = createMockRequest('?hard=true')
-      const params = createMockParams('1')
-
-      // Act
-      const response = await DELETE(request, { params })
-      const responseData = await response.json()
-
-      // Assert
-      expect(mockSupabaseClient.delete).toHaveBeenCalled()
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('id', 1)
-      expect(mockSupabaseClient.update).not.toHaveBeenCalled()
-      
-      expect(response.status).toBe(200)
-      expect(responseData.message).toBe('Product permanently deleted')
-      expect(responseData.product).toEqual(mockExistingProductResponse().data)
-    })
-
-    it('should handle hard delete database error', async () => {
-      // Arrange
-      mockSupabaseClient.delete.mockResolvedValue({
-        error: { message: 'Delete failed', code: 'DELETE_ERROR' }
-      })
-
-      const request = createMockRequest('?hard=true')
-      const params = createMockParams('1')
-
-      // Act
-      const response = await DELETE(request, { params })
-
-      // Assert
-      expect(createErrorResponse).toHaveBeenCalledWith('Failed to delete product', 500)
-    })
-
-    it('should handle various truthy values for hard parameter', async () => {
-      // Test different values that should trigger hard delete
-      const truthyValues = ['true', 'TRUE', 'True', '1', 'yes', 'YES']
-      
-      for (const value of truthyValues) {
-        // Reset mocks
-        vi.clearAllMocks()
-        vi.mocked(validateAdminAccess).mockResolvedValue({
-          success: true,
-          user: { id: 'admin-123', email: 'admin@example.com' },
-          role: 'Admin'
-        })
-        vi.mocked(createServerSupabaseClient).mockResolvedValue(mockSupabaseClient as any)
-        
-        mockExistingProduct()
-        mockHardDeleteSuccess()
-
-        const request = createMockRequest(`?hard=${value}`)
-        const params = createMockParams('1')
-
-        // Act
-        await DELETE(request, { params })
-
-        // Assert - only 'true' should trigger hard delete
-        if (value === 'true') {
-          expect(mockSupabaseClient.delete).toHaveBeenCalled()
-        } else {
-          expect(mockSupabaseClient.update).toHaveBeenCalled()
-        }
-      }
-    })
-  })
-
-  describe('Delete Already Deleted Product', () => {
-    it('should handle soft deleting already soft-deleted product', async () => {
-      // Arrange
-      const alreadyDeletedProduct = {
-        ...mockExistingProductResponse().data,
-        is_deleted: true
-      }
-      
-      mockSupabaseClient.single.mockResolvedValueOnce({
-        data: alreadyDeletedProduct,
-        error: null
-      })
-      
-      mockSupabaseClient.single.mockResolvedValueOnce({
-        data: {
-          ...alreadyDeletedProduct,
-          updated_at: '2024-01-01T12:00:00Z'
-        },
-        error: null
-      })
-
-      const request = createMockRequest()
-      const params = createMockParams('1')
-
-      // Act
-      const response = await DELETE(request, { params })
-
-      // Assert
-      expect(response.status).toBe(200)
-      expect(mockSupabaseClient.update).toHaveBeenCalled()
-    })
-
-    it('should handle hard deleting already soft-deleted product', async () => {
-      // Arrange
-      const alreadyDeletedProduct = {
-        ...mockExistingProductResponse().data,
-        is_deleted: true
-      }
-      
-      mockSupabaseClient.single.mockResolvedValueOnce({
-        data: alreadyDeletedProduct,
-        error: null
-      })
-      
-      mockHardDeleteSuccess()
-
-      const request = createMockRequest('?hard=true')
-      const params = createMockParams('1')
-
-      // Act
-      const response = await DELETE(request, { params })
-      const responseData = await response.json()
-
-      // Assert
-      expect(response.status).toBe(200)
-      expect(responseData.message).toBe('Product permanently deleted')
-      expect(responseData.product).toEqual(alreadyDeletedProduct)
-    })
-  })
 
   describe('General Error Handling', () => {
     it('should handle createServerSupabaseClient failure', async () => {
@@ -714,28 +580,8 @@ describe('DELETE /api/products/[id]', () => {
       expect(response.status).toBe(200)
       expect(responseData).toHaveProperty('message')
       expect(responseData).toHaveProperty('product')
-      expect(responseData.message).toBe('Product soft deleted')
+      expect(responseData.message).toBe('Product deleted successfully')
       expect(responseData.product).toEqual(updatedProduct)
-    })
-
-    it('should return correct response format for hard delete', async () => {
-      // Arrange
-      const existingProduct = mockExistingProductResponse().data
-      mockHardDeleteSuccess()
-
-      const request = createMockRequest('?hard=true')
-      const params = createMockParams('1')
-
-      // Act
-      const response = await DELETE(request, { params })
-      const responseData = await response.json()
-
-      // Assert
-      expect(response.status).toBe(200)
-      expect(responseData).toHaveProperty('message')
-      expect(responseData).toHaveProperty('product')
-      expect(responseData.message).toBe('Product permanently deleted')
-      expect(responseData.product).toEqual(existingProduct)
     })
 
     it('should preserve all product fields in response', async () => {
@@ -795,29 +641,6 @@ describe('DELETE /api/products/[id]', () => {
         is_deleted: true,
         updated_at: expect.any(String)
       })
-    })
-
-    it('should call database with correct query structure for hard delete', async () => {
-      // Arrange
-      mockExistingProduct()
-      mockHardDeleteSuccess()
-
-      const request = createMockRequest('?hard=true')
-      const params = createMockParams('1')
-
-      // Act
-      await DELETE(request, { params })
-
-      // Assert
-      // Verify existence check
-      expect(mockSupabaseClient.from).toHaveBeenCalledWith('products')
-      expect(mockSupabaseClient.select).toHaveBeenCalledWith('*')
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('id', 1)
-      expect(mockSupabaseClient.single).toHaveBeenCalled()
-      
-      // Verify delete call
-      expect(mockSupabaseClient.delete).toHaveBeenCalled()
-      expect(mockSupabaseClient.eq).toHaveBeenCalledWith('id', 1)
     })
 
     it('should use authenticated Supabase client', async () => {
