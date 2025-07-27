@@ -1,6 +1,12 @@
 "use client";
 import Image from "next/image";
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, {
+  useState,
+  useMemo,
+  useEffect,
+  useRef,
+  useCallback,
+} from "react";
 import {
   Search,
   SortAsc,
@@ -108,7 +114,7 @@ export default function HomePage() {
   const itemsPerPage = 6;
 
   // Fetch categories from API
-  const fetchCategories = async () => {
+  const fetchCategories = useCallback(async () => {
     // Prevent multiple simultaneous calls
     if (fetchingCategories.current || authLoading || !role) {
       return;
@@ -161,7 +167,7 @@ export default function HomePage() {
     } finally {
       fetchingCategories.current = false;
     }
-  };
+  }, [authLoading, role]);
 
   // Get categories for filter
   const filterCategories = useMemo(() => {
@@ -169,7 +175,7 @@ export default function HomePage() {
   }, [categories]);
 
   // Fetch products from API
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async () => {
     // Prevent multiple simultaneous calls
     if (fetchingProducts.current || authLoading || !role) {
       return;
@@ -219,7 +225,16 @@ export default function HomePage() {
       setIsLoading(false);
       fetchingProducts.current = false;
     }
-  };
+  }, [
+    authLoading,
+    role,
+    currentPage,
+    showDeleted,
+    searchTerm,
+    filterCategory,
+    sortBy,
+    itemsPerPage,
+  ]);
 
   useEffect(() => {
     if (authLoading || !role || initialFetchDone.current) {
@@ -230,7 +245,7 @@ export default function HomePage() {
 
     fetchCategories();
     fetchProducts();
-  }, [authLoading, role]);
+  }, [authLoading, role, fetchCategories, fetchProducts]);
 
   // Separate effect for filter/pagination changes
   useEffect(() => {
@@ -238,14 +253,23 @@ export default function HomePage() {
       return;
     }
     fetchProducts();
-  }, [currentPage, searchTerm, filterCategory, sortBy, showDeleted]);
+  }, [
+    currentPage,
+    searchTerm,
+    filterCategory,
+    sortBy,
+    showDeleted,
+    authLoading,
+    fetchProducts,
+    role,
+  ]);
 
   // Reset to first page when filters change (keep existing)
   useEffect(() => {
     if (currentPage !== 1) {
       setCurrentPage(1);
     }
-  }, [searchTerm, sortBy, filterCategory, showDeleted]);
+  }, [searchTerm, sortBy, filterCategory, showDeleted, currentPage]);
 
   // Handle pagination
   const handlePrevPage = () => {

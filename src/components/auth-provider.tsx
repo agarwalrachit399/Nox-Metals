@@ -1,7 +1,14 @@
 // components/auth-provider.tsx - Fixed race condition
 "use client";
 
-import { createContext, useContext, useEffect, useState, useRef } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useRef,
+  useCallback,
+} from "react";
 import { useRouter, usePathname } from "next/navigation";
 import type { User, Session } from "@supabase/supabase-js";
 import { createClient } from "@/lib/auth";
@@ -136,7 +143,7 @@ export default function AuthProvider({ children }: AuthProviderProps) {
   };
 
   // Force clean logout on auth failures
-  const forceCleanLogout = async () => {
+  const forceCleanLogout = useCallback(async () => {
     // Clear all auth state
     setSession(null);
     setUser(null);
@@ -152,7 +159,7 @@ export default function AuthProvider({ children }: AuthProviderProps) {
     // Reset refresh tracking
     refreshAttempts.current = 0;
     refreshCooldown.current = 0;
-  };
+  }, []);
 
   // Listen for auth errors
   useEffect(() => {
@@ -171,117 +178,120 @@ export default function AuthProvider({ children }: AuthProviderProps) {
     });
 
     return unsubscribe;
-  }, []);
+  }, [forceCleanLogout]);
 
   // Fetch user profile and role - UPDATED to handle loading state
-  const fetchUserProfile = async (
-    userId: string,
-    setLoadingState: boolean = true,
-  ) => {
-    try {
-      if (setLoadingState) {
-        setRoleLoading(true); // NEW: Set role loading when starting fetch
-      }
+  const fetchUserProfile = useCallback(
+    async (userId: string, setLoadingState: boolean = true) => {
+      try {
+        if (setLoadingState) {
+          setRoleLoading(true); // NEW: Set role loading when starting fetch
+        }
 
-      const { data: profile, error } = await supabase
-        .from("users")
-        .select("*")
-        .eq("id", userId)
-        .single();
+        const { data: profile, error } = await supabase
+          .from("users")
+          .select("*")
+          .eq("id", userId)
+          .single();
 
-      if (error) {
-        console.error("❌ Error fetching user profile:", error);
+        if (error) {
+          console.error("❌ Error fetching user profile:", error);
+          return null;
+        }
+
+        return profile;
+      } catch (error) {
+        console.error("❌ Error in fetchUserProfile:", error);
         return null;
+      } finally {
+        if (setLoadingState) {
+          setRoleLoading(false); // NEW: Clear role loading when done
+        }
       }
-
-      return profile;
-    } catch (error) {
-      console.error("❌ Error in fetchUserProfile:", error);
-      return null;
-    } finally {
-      if (setLoadingState) {
-        setRoleLoading(false); // NEW: Clear role loading when done
-      }
-    }
-  };
+    },
+    [supabase],
+  );
 
   // UPDATED: Helper function to update auth state atomically
-  const updateAuthState = async (
-    session: Session | null,
-    shouldFetchProfile: boolean = true,
-  ) => {
-    setSession(session);
-    const sessionUser = session?.user ?? null;
-    setUser(sessionUser);
+  const updateAuthState = useCallback(
+    async (session: Session | null, shouldFetchProfile: boolean = true) => {
+      setSession(session);
+      const sessionUser = session?.user ?? null;
+      setUser(sessionUser);
 
-    if (sessionUser && shouldFetchProfile) {
-      // Keep overall loading true while fetching profile
-      const profile = await fetchUserProfile(sessionUser.id, true);
-      setUserProfile(profile);
-      setRole(profile?.role ?? null);
-    } else {
-      setUserProfile(null);
-      setRole(null);
-      setRoleLoading(false);
-    }
+      if (sessionUser && shouldFetchProfile) {
+        // Keep overall loading true while fetching profile
+        const profile = await fetchUserProfile(sessionUser.id, true);
+        setUserProfile(profile);
+        setRole(profile?.role ?? null);
+      } else {
+        setUserProfile(null);
+        setRole(null);
+        setRoleLoading(false);
+      }
 
-    // Only set loading to false after everything is done
-    setLoading(false);
-  };
+      // Only set loading to false after everything is done
+      setLoading(false);
+    },
+    [fetchUserProfile],
+  );
 
   // Robust initialization with retry logic
-  const initializeAuth = async (retryCount = 0) => {
-    try {
-      // Wait a moment for cookies to be available on retry
-      if (retryCount > 0) {
-        await new Promise((resolve) =>
-          setTimeout(resolve, RETRY_DELAY * retryCount),
-        );
+  const initializeAuth = useCallback(
+    async (retryCount = 0) => {
+      try {
+        // Wait a moment for cookies to be available on retry
+        if (retryCount > 0) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, RETRY_DELAY * retryCount),
+          );
+        }
+
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession();
+
+        if (error) {
+          console.error("❌ Error getting session:", error);
+          throw error; // Trigger retry logic
+        }
+
+        // UPDATED: Use atomic state update
+        await updateAuthState(session);
+
+        // Success - reset retry count and mark as initialized
+        setInitialized(true);
+      } catch {
+        if (retryCount < MAX_INIT_RETRIES) {
+          // Retry after delay
+          setTimeout(
+            () => {
+              initializeAuth(retryCount + 1);
+            },
+            RETRY_DELAY * (retryCount + 1),
+          );
+        } else {
+          // Max retries reached - give up gracefully
+          AuthErrorHandler.createError(
+            AuthErrorType.NETWORK_ERROR,
+            "Failed to initialize authentication",
+          );
+          setInitialized(true); // Stop retrying
+          setLoading(false); // Allow app to continue (logged out state)
+          setRoleLoading(false); // NEW: Clear role loading
+        }
       }
-
-      const {
-        data: { session },
-        error,
-      } = await supabase.auth.getSession();
-
-      if (error) {
-        console.error("❌ Error getting session:", error);
-        throw error; // Trigger retry logic
-      }
-
-      // UPDATED: Use atomic state update
-      await updateAuthState(session);
-
-      // Success - reset retry count and mark as initialized
-      setInitialized(true);
-    } catch {
-      if (retryCount < MAX_INIT_RETRIES) {
-        // Retry after delay
-        setTimeout(
-          () => {
-            initializeAuth(retryCount + 1);
-          },
-          RETRY_DELAY * (retryCount + 1),
-        );
-      } else {
-        // Max retries reached - give up gracefully
-        AuthErrorHandler.createError(
-          AuthErrorType.NETWORK_ERROR,
-          "Failed to initialize authentication",
-        );
-        setInitialized(true); // Stop retrying
-        setLoading(false); // Allow app to continue (logged out state)
-        setRoleLoading(false); // NEW: Clear role loading
-      }
-    }
-  };
+    },
+    [supabase.auth, updateAuthState, MAX_INIT_RETRIES, RETRY_DELAY],
+  );
 
   // Initialize auth state once with retry logic
   useEffect(() => {
     if (initialized) return;
 
     initializeAuth();
-  }, [initialized]);
+  }, [initialized, initializeAuth]);
 
   // Listen for auth changes with enhanced failure handling - UPDATED
   useEffect(() => {
@@ -352,7 +362,7 @@ export default function AuthProvider({ children }: AuthProviderProps) {
     return () => {
       subscription?.unsubscribe();
     };
-  }, [initialized]);
+  }, [initialized, supabase.auth, updateAuthState, forceCleanLogout]);
 
   // Handle navigation (separate effect, only when auth state is stable) - UPDATED
   useEffect(() => {

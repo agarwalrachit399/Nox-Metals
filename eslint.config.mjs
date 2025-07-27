@@ -10,6 +10,17 @@ const compat = new FlatCompat({
 });
 
 const eslintConfig = [
+  // Global ignores - these will be ignored in all configurations
+  {
+    ignores: [
+      "src/__test__/**/*",
+      "src/__tests__/**/*", // Also ignore if you have both naming conventions
+      "**/*.test.ts",
+      "**/*.test.tsx",
+      "**/*.spec.ts",
+      "**/*.spec.tsx",
+    ],
+  },
   ...compat.extends(
     "next/core-web-vitals",
     "next/typescript",
