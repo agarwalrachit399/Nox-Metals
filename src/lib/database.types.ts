@@ -67,7 +67,7 @@ export interface Database {
           table_name: string;
           record_id: number;
           user_email: string | null;
-          changes: any | null;
+          changes: Record<string, unknown> | null;
           timestamp: string;
         };
         Insert: {
@@ -76,7 +76,7 @@ export interface Database {
           table_name: string;
           record_id: number;
           user_email?: string | null;
-          changes?: any | null;
+          changes?: Record<string, unknown> | null;
           timestamp?: string;
         };
         Update: {
@@ -85,7 +85,7 @@ export interface Database {
           table_name?: string;
           record_id?: number;
           user_email?: string | null;
-          changes?: any | null;
+          changes?: Record<string, unknown> | null;
           timestamp?: string;
         };
       };
@@ -118,7 +118,7 @@ export interface Database {
     };
     Functions: {
       get_user_role: {
-        Args: {};
+        Args: object;
         Returns: string;
       };
     };

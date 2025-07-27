@@ -209,7 +209,7 @@ export async function DELETE(
     }
 
     // Check if product exists
-    const { data: existingProduct, error: fetchError } = await supabase
+    const { error: fetchError } = await supabase
       .from("products")
       .select("*")
       .eq("id", productId)

@@ -1,5 +1,7 @@
 // lib/dummy-data.ts
 
+import { Product, ProductInsert } from "./database.types";
+
 // Re-export types from database.types for backward compatibility
 export type {
   Product,
@@ -23,7 +25,7 @@ export interface LegacyProduct {
 }
 
 // Transform function to convert between Supabase format and legacy format
-export function transformProductFromDB(dbProduct: any): LegacyProduct {
+export function transformProductFromDB(dbProduct: Product): LegacyProduct {
   return {
     id: dbProduct.id,
     name: dbProduct.name,
