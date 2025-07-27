@@ -1,162 +1,184 @@
 // src/app/audit-logs/page.tsx
-'use client'
+"use client";
 
-import React, { useState, useEffect } from 'react'
-import { History, Calendar, Filter, ChevronLeft, ChevronRight, RefreshCw, Shield, Search, FileText, Eye } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Badge } from '@/components/ui/badge'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { AdminOnly } from '@/components/role-guard'
-import AuthGuard from '@/components/auth-guard'
-import Navbar from '@/components/navbar'
+import React, { useState, useEffect } from "react";
+import {
+  History,
+  Filter,
+  ChevronLeft,
+  ChevronRight,
+  RefreshCw,
+  Shield,
+  FileText,
+  Eye,
+} from "lucide-react";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AdminOnly } from "@/components/role-guard";
+import AuthGuard from "@/components/auth-guard";
+import Navbar from "@/components/navbar";
 
 interface AuditLog {
-  id: number
-  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'RESTORE'
-  table_name: string
-  record_id: number
-  user_email: string | null
-  changes: any
-  timestamp: string
+  id: number;
+  action: "CREATE" | "UPDATE" | "DELETE" | "RESTORE";
+  table_name: string;
+  record_id: number;
+  user_email: string | null;
+  changes: any;
+  timestamp: string;
 }
 
 interface ApiResponse {
-  auditLogs: AuditLog[]
+  auditLogs: AuditLog[];
   pagination: {
-    page: number
-    limit: number
-    total: number
-    totalPages: number
-  }
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
 }
 
 export default function AuditLogsPage() {
   // State for audit logs and API
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // State for filters
-  const [currentPage, setCurrentPage] = useState(1)
-  const [actionFilter, setActionFilter] = useState<string>('all')
-  const [tableFilter, setTableFilter] = useState<string>('all')
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
-  const [totalPages, setTotalPages] = useState(1)
-  const [totalLogs, setTotalLogs] = useState(0)
+  const [currentPage, setCurrentPage] = useState(1);
+  const [actionFilter, setActionFilter] = useState<string>("all");
+  const [tableFilter, setTableFilter] = useState<string>("all");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalLogs, setTotalLogs] = useState(0);
 
-  const itemsPerPage = 20
+  const itemsPerPage = 20;
 
   // Fetch audit logs from API
   const fetchAuditLogs = async () => {
     try {
-      setIsLoading(true)
-      setError(null)
+      setIsLoading(true);
+      setError(null);
 
       const searchParams = new URLSearchParams({
         page: currentPage.toString(),
         limit: itemsPerPage.toString(),
-        ...(actionFilter !== 'all' && { action: actionFilter }),
-        ...(tableFilter !== 'all' && { table: tableFilter }),
+        ...(actionFilter !== "all" && { action: actionFilter }),
+        ...(tableFilter !== "all" && { table: tableFilter }),
         ...(startDate && { startDate }),
-        ...(endDate && { endDate })
-      })
+        ...(endDate && { endDate }),
+      });
 
-      const response = await fetch(`/api/audit-logs?${searchParams}`)
-      
+      const response = await fetch(`/api/audit-logs?${searchParams}`);
+
       if (!response.ok) {
         if (response.status === 403) {
-          setError('Access denied. Only administrators can view audit logs.')
+          setError("Access denied. Only administrators can view audit logs.");
         } else {
-          throw new Error('Failed to fetch audit logs')
+          throw new Error("Failed to fetch audit logs");
         }
-        return
+        return;
       }
 
-      const data: ApiResponse = await response.json()
-      setAuditLogs(data.auditLogs)
-      setTotalPages(data.pagination.totalPages)
-      setTotalLogs(data.pagination.total)
+      const data: ApiResponse = await response.json();
+      setAuditLogs(data.auditLogs);
+      setTotalPages(data.pagination.totalPages);
+      setTotalLogs(data.pagination.total);
     } catch (error) {
-      console.error('Error fetching audit logs:', error)
-      setError('Failed to load audit logs. Please try again.')
+      console.error("Error fetching audit logs:", error);
+      setError("Failed to load audit logs. Please try again.");
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   // Fetch logs on component mount and when filters change
   useEffect(() => {
-    fetchAuditLogs()
-  }, [currentPage, actionFilter, tableFilter, startDate, endDate])
+    fetchAuditLogs();
+  }, [currentPage, actionFilter, tableFilter, startDate, endDate]);
 
   // Reset to first page when filters change
   useEffect(() => {
     if (currentPage !== 1) {
-      setCurrentPage(1)
+      setCurrentPage(1);
     }
-  }, [actionFilter, tableFilter, startDate, endDate])
+  }, [actionFilter, tableFilter, startDate, endDate]);
 
   // Handle pagination
   const handlePrevPage = () => {
-    setCurrentPage(prev => Math.max(prev - 1, 1))
-  }
+    setCurrentPage((prev) => Math.max(prev - 1, 1));
+  };
 
   const handleNextPage = () => {
-    setCurrentPage(prev => Math.min(prev + 1, totalPages))
-  }
+    setCurrentPage((prev) => Math.min(prev + 1, totalPages));
+  };
 
   // Format timestamp
   const formatTimestamp = (timestamp: string) => {
-    return new Date(timestamp).toLocaleString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    })
-  }
+    return new Date(timestamp).toLocaleString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  };
 
   // Get action badge variant
   const getActionBadgeVariant = (action: string) => {
     switch (action) {
-      case 'CREATE': return 'default'
-      case 'UPDATE': return 'secondary'
-      case 'DELETE': return 'destructive'
-      case 'RESTORE': return 'outline'
-      default: return 'secondary'
+      case "CREATE":
+        return "default";
+      case "UPDATE":
+        return "secondary";
+      case "DELETE":
+        return "destructive";
+      case "RESTORE":
+        return "outline";
+      default:
+        return "secondary";
     }
-  }
+  };
 
   // Format changes for display
   const formatChanges = (changes: any) => {
-    if (!changes) return 'No changes recorded'
-    
+    if (!changes) return "No changes recorded";
+
     try {
-      return JSON.stringify(changes, null, 2)
+      return JSON.stringify(changes, null, 2);
     } catch {
-      return 'Invalid change data'
+      return "Invalid change data";
     }
-  }
+  };
 
   return (
     <AuthGuard>
       <div className="min-h-screen bg-gray-50">
         <Navbar />
-        <AdminOnly fallback={
-          <div className="container mx-auto px-4 py-8">
-            <Alert variant="destructive">
-              <Shield className="h-4 w-4" />
-              <AlertDescription>
-                Access denied. Only administrators can view audit logs.
-              </AlertDescription>
-            </Alert>
-          </div>
-        }>
+        <AdminOnly
+          fallback={
+            <div className="container mx-auto px-4 py-8">
+              <Alert variant="destructive">
+                <Shield className="h-4 w-4" />
+                <AlertDescription>
+                  Access denied. Only administrators can view audit logs.
+                </AlertDescription>
+              </Alert>
+            </div>
+          }
+        >
           <div className="container mx-auto px-4 py-8">
             {/* Header */}
             <div className="mb-8">
@@ -254,17 +276,22 @@ export default function AuditLogsPage() {
               {/* Results Count */}
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">
-                  {isLoading ? 'Loading...' : `Showing ${totalLogs} audit log entries`}
+                  {isLoading
+                    ? "Loading..."
+                    : `Showing ${totalLogs} audit log entries`}
                 </span>
-                {(actionFilter !== 'all' || tableFilter !== 'all' || startDate || endDate) && (
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
+                {(actionFilter !== "all" ||
+                  tableFilter !== "all" ||
+                  startDate ||
+                  endDate) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => {
-                      setActionFilter('all')
-                      setTableFilter('all')
-                      setStartDate('')
-                      setEndDate('')
+                      setActionFilter("all");
+                      setTableFilter("all");
+                      setStartDate("");
+                      setEndDate("");
                     }}
                   >
                     Clear Filters
@@ -277,7 +304,9 @@ export default function AuditLogsPage() {
             {isLoading && (
               <div className="flex items-center justify-center py-12">
                 <RefreshCw className="h-8 w-8 animate-spin mr-2" />
-                <span className="text-muted-foreground">Loading audit logs...</span>
+                <span className="text-muted-foreground">
+                  Loading audit logs...
+                </span>
               </div>
             )}
 
@@ -331,12 +360,16 @@ export default function AuditLogsPage() {
               <div className="text-center py-12">
                 <div className="text-muted-foreground mb-4">
                   <FileText className="h-12 w-12 mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No audit logs found</h3>
+                  <h3 className="text-lg font-semibold mb-2">
+                    No audit logs found
+                  </h3>
                   <p className="mb-4">
-                    {actionFilter !== 'all' || tableFilter !== 'all' || startDate || endDate
-                      ? 'Try adjusting your filter criteria'
-                      : 'No system activity has been recorded yet'
-                    }
+                    {actionFilter !== "all" ||
+                    tableFilter !== "all" ||
+                    startDate ||
+                    endDate
+                      ? "Try adjusting your filter criteria"
+                      : "No system activity has been recorded yet"}
                   </p>
                 </div>
               </div>
@@ -354,16 +387,17 @@ export default function AuditLogsPage() {
                   <ChevronLeft className="h-4 w-4 mr-1" />
                   Previous
                 </Button>
-                
+
                 <div className="flex items-center gap-2">
                   {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-                    const page = i + 1
+                    const page = i + 1;
                     if (totalPages <= 5) {
-                      return page
+                      return page;
                     }
-                    if (currentPage <= 3) return page
-                    if (currentPage >= totalPages - 2) return totalPages - 4 + i
-                    return currentPage - 2 + i
+                    if (currentPage <= 3) return page;
+                    if (currentPage >= totalPages - 2)
+                      return totalPages - 4 + i;
+                    return currentPage - 2 + i;
                   }).map((page) => (
                     <Button
                       key={page}
@@ -392,5 +426,5 @@ export default function AuditLogsPage() {
         </AdminOnly>
       </div>
     </AuthGuard>
-  )
+  );
 }

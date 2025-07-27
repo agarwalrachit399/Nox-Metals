@@ -1,281 +1,322 @@
-'use client'
+"use client";
 
-import React, { useState, useMemo, useEffect, useRef } from 'react'
-import { Search, SortAsc, SortDesc, Filter, ChevronLeft, ChevronRight, Plus, Edit, Trash2, Loader2, RefreshCw, Eye, Shield, AlertTriangle } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Badge } from '@/components/ui/badge'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
-import { type LegacyProduct, transformProductFromDB } from '@/lib/dummy-data'
-import ProductForm from '@/components/product-form'
-import AuthGuard from '@/components/auth-guard'
-import Navbar from '@/components/navbar'
-import { useAuth } from '@/components/auth-provider'
+import React, { useState, useMemo, useEffect, useRef } from "react";
+import {
+  Search,
+  SortAsc,
+  SortDesc,
+  Filter,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Edit,
+  Trash2,
+  Loader2,
+  RefreshCw,
+  Eye,
+  Shield,
+  AlertTriangle,
+} from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { type LegacyProduct, transformProductFromDB } from "@/lib/dummy-data";
+import ProductForm from "@/components/product-form";
+import AuthGuard from "@/components/auth-guard";
+import Navbar from "@/components/navbar";
+import { useAuth } from "@/components/auth-provider";
 
-type Product = LegacyProduct
-type SortOption = 'name-asc' | 'name-desc' | 'price-asc' | 'price-desc' | 'createdAt-desc'
+type Product = LegacyProduct;
+type SortOption =
+  | "name-asc"
+  | "name-desc"
+  | "price-asc"
+  | "price-desc"
+  | "createdAt-desc";
 
 interface ApiResponse {
-  products: any[] // Raw database format
+  products: any[]; // Raw database format
   pagination: {
-    page: number
-    limit: number
-    total: number
-    totalPages: number
-  }
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
 }
 
 export default function HomePage() {
   // State for products and API
-  const [products, setProducts] = useState<Product[]>([])
-  const [categories, setCategories] = useState<string[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [isLoadingCategories, setIsLoadingCategories] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   // Get user role for access control
-  const { isAdmin, role, loading: authLoading , user} = useAuth()
- console.log('🏠 HomePage render:', { 
-    authLoading, 
-    role, 
-    user: !!user,
-    productsLength: products.length,
-    isLoading 
-  })
+  const { isAdmin, role, loading: authLoading, user } = useAuth();
 
   // State for search/filter/sort
-  const [searchTerm, setSearchTerm] = useState('')
-  const [sortBy, setSortBy] = useState<SortOption>('name-asc')
-  const [filterCategory, setFilterCategory] = useState<string>('all')
-  const [currentPage, setCurrentPage] = useState(1)
-  const [showDeleted, setShowDeleted] = useState(false)
-  const [totalPages, setTotalPages] = useState(1)
-  const [totalProducts, setTotalProducts] = useState(0)
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState<SortOption>("name-asc");
+  const [filterCategory, setFilterCategory] = useState<string>("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [showDeleted, setShowDeleted] = useState(false);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalProducts, setTotalProducts] = useState(0);
 
   // State for CRUD operations
-  const [isFormOpen, setIsFormOpen] = useState(false)
-  const [formMode, setFormMode] = useState<'create' | 'edit'>('create')
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
-  const [productToDelete, setProductToDelete] = useState<Product | null>(null)
-  const [isDeleting, setIsDeleting] = useState(false)
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [formMode, setFormMode] = useState<"create" | "edit">("create");
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-  const fetchingProducts = useRef(false)
-  const fetchingCategories = useRef(false)
-  const initialFetchDone = useRef(false)
+  const fetchingProducts = useRef(false);
+  const fetchingCategories = useRef(false);
+  const initialFetchDone = useRef(false);
 
-  const itemsPerPage = 6
+  const itemsPerPage = 6;
 
   // Fetch categories from API
   const fetchCategories = async () => {
     // Prevent multiple simultaneous calls
     if (fetchingCategories.current || authLoading || !role) {
-      console.log('⏭️ Skipping categories fetch:', { 
-        fetching: fetchingCategories.current, 
-        authLoading, 
-        role 
-      })
-      return
+      return;
     }
 
     try {
-      fetchingCategories.current = true
-      setIsLoadingCategories(true)
-      console.log('📂 Fetching categories...')
-      
-      const response = await fetch('/api/categories')
-      
+      fetchingCategories.current = true;
+      setIsLoadingCategories(true);
+
+      const response = await fetch("/api/categories");
+
       if (response.ok) {
-        const categoriesData = await response.json()
-        console.log('✅ Categories fetched:', categoriesData.length)
-        setCategories(['all', ...categoriesData.map((cat: any) => cat.name)])
+        const categoriesData = await response.json();
+        setCategories(["all", ...categoriesData.map((cat: any) => cat.name)]);
       } else if (response.status === 401 || response.status === 403) {
-        console.log('🔒 Categories access denied, using fallback')
-        setCategories(['all', 'Electronics', 'Clothing', 'Health', 'Furniture', 'Home', 'Accessories'])
+        setCategories([
+          "all",
+          "Electronics",
+          "Clothing",
+          "Health",
+          "Furniture",
+          "Home",
+          "Accessories",
+        ]);
       } else {
-        console.error('❌ Failed to fetch categories')
-        setCategories(['all', 'Electronics', 'Clothing', 'Health', 'Furniture', 'Home', 'Accessories'])
+        console.error("❌ Failed to fetch categories");
+        setCategories([
+          "all",
+          "Electronics",
+          "Clothing",
+          "Health",
+          "Furniture",
+          "Home",
+          "Accessories",
+        ]);
       }
     } catch (error) {
-      console.error('❌ Error fetching categories:', error)
-      setCategories(['all', 'Electronics', 'Clothing', 'Health', 'Furniture', 'Home', 'Accessories'])
+      console.error("❌ Error fetching categories:", error);
+      setCategories([
+        "all",
+        "Electronics",
+        "Clothing",
+        "Health",
+        "Furniture",
+        "Home",
+        "Accessories",
+      ]);
     } finally {
-      setIsLoadingCategories(false)
-      fetchingCategories.current = false
+      setIsLoadingCategories(false);
+      fetchingCategories.current = false;
     }
-  }
+  };
 
   // Get categories for filter
   const filterCategories = useMemo(() => {
-    return categories
-  }, [categories])
+    return categories;
+  }, [categories]);
 
   // Fetch products from API
-   const fetchProducts = async () => {
+  const fetchProducts = async () => {
     // Prevent multiple simultaneous calls
     if (fetchingProducts.current || authLoading || !role) {
-      console.log('⏭️ Skipping products fetch:', { 
-        fetching: fetchingProducts.current, 
-        authLoading, 
-        role 
-      })
-      return
+      return;
     }
 
     try {
-      fetchingProducts.current = true
-      setIsLoading(true)
-      setError(null)
-      console.log('📦 Fetching products...')
+      fetchingProducts.current = true;
+      setIsLoading(true);
+      setError(null);
 
       const searchParams = new URLSearchParams({
         page: currentPage.toString(),
         limit: itemsPerPage.toString(),
         includeDeleted: showDeleted.toString(),
         ...(searchTerm && { search: searchTerm }),
-        ...(filterCategory !== 'all' && { category: filterCategory }),
-        ...(sortBy && { sortBy })
-      })
+        ...(filterCategory !== "all" && { category: filterCategory }),
+        ...(sortBy && { sortBy }),
+      });
 
-      const response = await fetch(`/api/products?${searchParams}`)
-      
+      const response = await fetch(`/api/products?${searchParams}`);
+
       if (!response.ok) {
         if (response.status === 401) {
-          console.log('🔒 Products: Authentication required')
-          return
+          return;
         } else if (response.status === 403) {
-          setError('Access denied. You do not have permission to view products.')
+          setError(
+            "Access denied. You do not have permission to view products.",
+          );
         } else {
-          throw new Error('Failed to fetch products')
+          throw new Error("Failed to fetch products");
         }
-        return
+        return;
       }
 
-      const data: ApiResponse = await response.json()
-      console.log('✅ Products fetched:', data.products.length, 'total:', data.pagination.total)
-      
-      const transformedProducts = data.products.map(transformProductFromDB)
-      setProducts(transformedProducts)
-      setTotalPages(data.pagination.totalPages)
-      setTotalProducts(data.pagination.total)
+      const data: ApiResponse = await response.json();
+
+      const transformedProducts = data.products.map(transformProductFromDB);
+      setProducts(transformedProducts);
+      setTotalPages(data.pagination.totalPages);
+      setTotalProducts(data.pagination.total);
     } catch (error) {
-      console.error('❌ Error fetching products:', error)
+      console.error("❌ Error fetching products:", error);
       if (role) {
-        setError('Failed to load products. Please try again.')
+        setError("Failed to load products. Please try again.");
       }
     } finally {
-      setIsLoading(false)
-      fetchingProducts.current = false
+      setIsLoading(false);
+      fetchingProducts.current = false;
     }
-  }
-
+  };
 
   useEffect(() => {
     if (authLoading || !role || initialFetchDone.current) {
-      return
+      return;
     }
 
-    console.log('🚀 Initial data fetch triggered')
-    initialFetchDone.current = true
-    
-    fetchCategories()
-    fetchProducts()
-  }, [authLoading, role])
+    initialFetchDone.current = true;
+
+    fetchCategories();
+    fetchProducts();
+  }, [authLoading, role]);
 
   // Separate effect for filter/pagination changes
   useEffect(() => {
     if (!initialFetchDone.current || authLoading || !role) {
-      return
+      return;
     }
-
-    console.log('🔄 Refetching due to filter changes')
-    fetchProducts()
-  }, [currentPage, searchTerm, filterCategory, sortBy, showDeleted])
+    fetchProducts();
+  }, [currentPage, searchTerm, filterCategory, sortBy, showDeleted]);
 
   // Reset to first page when filters change (keep existing)
   useEffect(() => {
     if (currentPage !== 1) {
-      setCurrentPage(1)
+      setCurrentPage(1);
     }
-  }, [searchTerm, sortBy, filterCategory, showDeleted])
+  }, [searchTerm, sortBy, filterCategory, showDeleted]);
 
   // Handle pagination
   const handlePrevPage = () => {
-    setCurrentPage(prev => Math.max(prev - 1, 1))
-  }
+    setCurrentPage((prev) => Math.max(prev - 1, 1));
+  };
 
   const handleNextPage = () => {
-    setCurrentPage(prev => Math.min(prev + 1, totalPages))
-  }
+    setCurrentPage((prev) => Math.min(prev + 1, totalPages));
+  };
 
   // Handle product creation (Admin only)
   const handleCreateProduct = () => {
     if (!isAdmin) {
-      setError('Only administrators can create products.')
-      return
+      setError("Only administrators can create products.");
+      return;
     }
-    setFormMode('create')
-    setSelectedProduct(null)
-    setIsFormOpen(true)
-  }
+    setFormMode("create");
+    setSelectedProduct(null);
+    setIsFormOpen(true);
+  };
 
   // Handle product editing (Admin only)
   const handleEditProduct = (product: Product) => {
     if (!isAdmin) {
-      setError('Only administrators can edit products.')
-      return
+      setError("Only administrators can edit products.");
+      return;
     }
-    setFormMode('edit')
-    setSelectedProduct(product)
-    setIsFormOpen(true)
-  }
+    setFormMode("edit");
+    setSelectedProduct(product);
+    setIsFormOpen(true);
+  };
 
   // Handle product deletion (Admin only)
   const handleDeleteProduct = (product: Product) => {
     if (!isAdmin) {
-      setError('Only administrators can delete products.')
-      return
+      setError("Only administrators can delete products.");
+      return;
     }
-    setProductToDelete(product)
-  }
+    setProductToDelete(product);
+  };
 
   const confirmDelete = async () => {
-    if (!productToDelete || !isAdmin) return
+    if (!productToDelete || !isAdmin) return;
 
-    setIsDeleting(true)
+    setIsDeleting(true);
     try {
       const response = await fetch(`/api/products/${productToDelete.id}`, {
-        method: 'DELETE',
-      })
+        method: "DELETE",
+      });
 
       if (!response.ok) {
         if (response.status === 401) {
-          setError('Authentication required. Please log in again.')
+          setError("Authentication required. Please log in again.");
         } else if (response.status === 403) {
-          setError('Access denied. Only administrators can delete products.')
+          setError("Access denied. Only administrators can delete products.");
         } else {
-          throw new Error('Failed to delete product')
+          throw new Error("Failed to delete product");
         }
-        return
+        return;
       }
 
       // Refresh products list
-      await fetchProducts()
-      setProductToDelete(null)
+      await fetchProducts();
+      setProductToDelete(null);
     } catch (error) {
-      console.error('Error deleting product:', error)
-      setError('Failed to delete product. Please try again.')
+      console.error("Error deleting product:", error);
+      setError("Failed to delete product. Please try again.");
     } finally {
-      setIsDeleting(false)
+      setIsDeleting(false);
     }
-  }
+  };
 
   // Handle form success
   const handleFormSuccess = () => {
-    fetchProducts() // Refresh the products list
-  }
+    fetchProducts(); // Refresh the products list
+  };
 
   if (error) {
     return (
@@ -296,7 +337,7 @@ export default function HomePage() {
           </div>
         </div>
       </AuthGuard>
-    )
+    );
   }
 
   return (
@@ -309,24 +350,33 @@ export default function HomePage() {
               <div className="flex items-center gap-3">
                 <h1 className="text-4xl font-bold">Product Catalog</h1>
                 {role && (
-                  <Badge variant={isAdmin ? "default" : "secondary"} className="flex items-center gap-1">
-                    {isAdmin ? <Shield className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                    {isAdmin ? 'Full Access' : 'View Only'}
+                  <Badge
+                    variant={isAdmin ? "default" : "secondary"}
+                    className="flex items-center gap-1"
+                  >
+                    {isAdmin ? (
+                      <Shield className="h-3 w-3" />
+                    ) : (
+                      <Eye className="h-3 w-3" />
+                    )}
+                    {isAdmin ? "Full Access" : "View Only"}
                   </Badge>
                 )}
               </div>
               {isAdmin && (
-                <Button onClick={handleCreateProduct} className="flex items-center gap-2">
+                <Button
+                  onClick={handleCreateProduct}
+                  className="flex items-center gap-2"
+                >
                   <Plus className="h-4 w-4" />
                   Add Product
                 </Button>
               )}
             </div>
             <p className="text-muted-foreground">
-              {isAdmin 
-                ? 'Manage your product catalog with full administrative access'
-                : 'Browse our product catalog'
-              }
+              {isAdmin
+                ? "Manage your product catalog with full administrative access"
+                : "Browse our product catalog"}
             </p>
           </div>
 
@@ -345,7 +395,10 @@ export default function HomePage() {
               </div>
 
               {/* Sort */}
-              <Select value={sortBy} onValueChange={(value: SortOption) => setSortBy(value)}>
+              <Select
+                value={sortBy}
+                onValueChange={(value: SortOption) => setSortBy(value)}
+              >
                 <SelectTrigger className="w-full sm:w-[200px]">
                   <SelectValue placeholder="Sort by" />
                 </SelectTrigger>
@@ -389,11 +442,11 @@ export default function HomePage() {
                   <SelectValue placeholder="Filter by category" />
                 </SelectTrigger>
                 <SelectContent>
-                  {filterCategories.map(category => (
+                  {filterCategories.map((category) => (
                     <SelectItem key={category} value={category}>
                       <div className="flex items-center gap-2">
                         <Filter className="h-4 w-4" />
-                        {category === 'all' ? 'All Categories' : category}
+                        {category === "all" ? "All Categories" : category}
                       </div>
                     </SelectItem>
                   ))}
@@ -410,14 +463,18 @@ export default function HomePage() {
                     size="sm"
                     onClick={() => setShowDeleted(!showDeleted)}
                   >
-                    {showDeleted ? "Show Active Products" : "Show Deleted Products"}
+                    {showDeleted
+                      ? "Show Active Products"
+                      : "Show Deleted Products"}
                   </Button>
                 )}
                 <span className="text-sm text-muted-foreground">
-                  {isLoading ? 'Loading...' : `Showing ${totalProducts} products`}
+                  {isLoading
+                    ? "Loading..."
+                    : `Showing ${totalProducts} products`}
                 </span>
               </div>
-              
+
               {!isLoading && (
                 <Button variant="ghost" size="sm" onClick={fetchProducts}>
                   <RefreshCw className="h-4 w-4 mr-2" />
@@ -431,7 +488,9 @@ export default function HomePage() {
           {isLoading && (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin" />
-              <span className="ml-2 text-muted-foreground">Loading products...</span>
+              <span className="ml-2 text-muted-foreground">
+                Loading products...
+              </span>
             </div>
           )}
 
@@ -443,13 +502,15 @@ export default function HomePage() {
                   <CardHeader className="pb-3">
                     <div className="aspect-video w-full bg-muted rounded-md mb-3 overflow-hidden">
                       <img
-                        src={product.image ?? ''}
+                        src={product.image ?? ""}
                         alt={product.name}
                         className="w-full h-full object-cover"
                       />
                     </div>
                     <div className="flex items-start justify-between">
-                      <CardTitle className="text-lg line-clamp-2">{product.name}</CardTitle>
+                      <CardTitle className="text-lg line-clamp-2">
+                        {product.name}
+                      </CardTitle>
                       <Badge variant="secondary" className="ml-2 shrink-0">
                         {product.category}
                       </Badge>
@@ -515,15 +576,19 @@ export default function HomePage() {
             <div className="text-center py-12">
               <div className="text-muted-foreground mb-4">
                 <Search className="h-12 w-12 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No products found</h3>
+                <h3 className="text-lg font-semibold mb-2">
+                  No products found
+                </h3>
                 <p className="mb-4">
-                  {searchTerm || filterCategory !== 'all'
-                    ? 'Try adjusting your search or filter criteria'
-                    : 'Get started by adding your first product'
-                  }
+                  {searchTerm || filterCategory !== "all"
+                    ? "Try adjusting your search or filter criteria"
+                    : "Get started by adding your first product"}
                 </p>
-                {!searchTerm && filterCategory === 'all' && isAdmin && (
-                  <Button onClick={handleCreateProduct} className="flex items-center gap-2 mx-auto">
+                {!searchTerm && filterCategory === "all" && isAdmin && (
+                  <Button
+                    onClick={handleCreateProduct}
+                    className="flex items-center gap-2 mx-auto"
+                  >
                     <Plus className="h-4 w-4" />
                     Add Your First Product
                   </Button>
@@ -544,17 +609,17 @@ export default function HomePage() {
                 <ChevronLeft className="h-4 w-4 mr-1" />
                 Previous
               </Button>
-              
+
               <div className="flex items-center gap-2">
                 {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-                  const page = i + 1
+                  const page = i + 1;
                   if (totalPages <= 5) {
-                    return page
+                    return page;
                   }
                   // Show first, last, current, and adjacent pages
-                  if (currentPage <= 3) return page
-                  if (currentPage >= totalPages - 2) return totalPages - 4 + i
-                  return currentPage - 2 + i
+                  if (currentPage <= 3) return page;
+                  if (currentPage >= totalPages - 2) return totalPages - 4 + i;
+                  return currentPage - 2 + i;
                 }).map((page) => (
                   <Button
                     key={page}
@@ -593,23 +658,32 @@ export default function HomePage() {
 
           {/* Delete Confirmation Dialog (Admin only) */}
           {isAdmin && (
-            <AlertDialog open={!!productToDelete} onOpenChange={() => setProductToDelete(null)}>
+            <AlertDialog
+              open={!!productToDelete}
+              onOpenChange={() => setProductToDelete(null)}
+            >
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>Delete Product</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Are you sure you want to delete "{productToDelete?.name}"? This action will soft delete the product and it can be restored later.
+                    Are you sure you want to delete &quot;
+                    {productToDelete?.name}&quot;? This action will soft delete
+                    the product and it can be restored later.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                  <AlertDialogCancel disabled={isDeleting}>
+                    Cancel
+                  </AlertDialogCancel>
                   <AlertDialogAction
                     onClick={confirmDelete}
                     disabled={isDeleting}
                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                   >
-                    {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {isDeleting ? 'Deleting...' : 'Delete Product'}
+                    {isDeleting && (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    )}
+                    {isDeleting ? "Deleting..." : "Delete Product"}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
@@ -618,5 +692,5 @@ export default function HomePage() {
         </div>
       </div>
     </AuthGuard>
-  )
+  );
 }

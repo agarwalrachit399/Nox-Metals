@@ -1,15 +1,15 @@
 // lib/auth.ts
-import { createBrowserClient, createServerClient } from '@supabase/ssr'
-import { Database } from './database.types'
-import { supabase } from './supabase'
+import { createBrowserClient, createServerClient } from "@supabase/ssr";
+import { Database } from "./database.types";
+import { supabase } from "./supabase";
 
 // Client-side Supabase client for components
 export const createClient = () => {
   return createBrowserClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-}
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  );
+};
 
 // Server-side Supabase client for server components and API routes
 export const createServerSupabaseClient = async (cookieStore: any) => {
@@ -19,13 +19,13 @@ export const createServerSupabaseClient = async (cookieStore: any) => {
     {
       cookies: {
         getAll() {
-          return cookieStore.getAll()
+          return cookieStore.getAll();
         },
         setAll(cookiesToSet) {
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            )
+              cookieStore.set(name, value, options),
+            );
           } catch {
             // The `setAll` method was called from a Server Component.
             // This can be ignored if you have middleware refreshing
@@ -33,30 +33,39 @@ export const createServerSupabaseClient = async (cookieStore: any) => {
           }
         },
       },
-    }
-  )
-}
+    },
+  );
+};
 // Auth helper functions
 export const getUser = async (cookieStore: any) => {
-  const supabase = await createServerSupabaseClient(cookieStore)
-  const { data: { user }, error } = await supabase.auth.getUser()
-  
+  const supabase = await createServerSupabaseClient(cookieStore);
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
   if (error) {
-    console.error('Error getting user:', error)
-    return null
+    console.error("Error getting user:", error);
+    return null;
   }
-  
-  return user
-}
-  const { data: { session }, error } = await supabase.auth.getSession()
+
+  return user;
+};
+const {
+  data: { session },
+  error,
+} = await supabase.auth.getSession();
 export const getSession = async (cookieStore: any) => {
-  const supabase = await createServerSupabaseClient(cookieStore)
-  const { data: { session }, error } = await supabase.auth.getSession()
-  
+  const supabase = await createServerSupabaseClient(cookieStore);
+  const {
+    data: { session },
+    error,
+  } = await supabase.auth.getSession();
+
   if (error) {
-    console.error('Error getting session:', error)
-    return null
+    console.error("Error getting session:", error);
+    return null;
   }
-  
-  return session
-}
+
+  return session;
+};

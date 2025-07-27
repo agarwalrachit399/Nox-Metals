@@ -1,10 +1,17 @@
 // components/navbar.tsx
-'use client'
+"use client";
 
-import { useState } from 'react'
-import Link from 'next/link'
-import { LogOut, User, Loader2, Shield, Eye, History, Home } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import Link from "next/link";
+import {
+  LogOut,
+  User,
+  Loader2,
+  Shield,
+  Eye,
+  History,
+  Home,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,41 +19,45 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Badge } from '@/components/ui/badge'
-import { useAuth } from '@/components/auth-provider'
-import { usePathname } from 'next/navigation'
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/components/auth-provider";
+import { usePathname } from "next/navigation";
 
 export default function Navbar() {
-  const { user, signOut, loading: authLoading, role, isAdmin } = useAuth()
-  const pathname = usePathname()
+  const { user, signOut, loading: authLoading, role, isAdmin } = useAuth();
+  const pathname = usePathname();
 
   const handleSignOut = async () => {
     try {
-      await signOut()
+      await signOut();
       // Don't manage local state here - let AuthProvider handle it
     } catch (error) {
-      console.error('Error signing out:', error)
+      console.error("Error signing out:", error);
     }
-  }
+  };
 
   const getUserInitials = (email: string) => {
     return email
-      .split('@')[0]
-      .split('.')
-      .map(part => part.charAt(0).toUpperCase())
-      .join('')
-      .slice(0, 2)
-  }
+      .split("@")[0]
+      .split(".")
+      .map((part) => part.charAt(0).toUpperCase())
+      .join("")
+      .slice(0, 2);
+  };
 
   const getRoleIcon = () => {
-    return isAdmin ? <Shield className="h-3 w-3" /> : <Eye className="h-3 w-3" />
-  }
+    return isAdmin ? (
+      <Shield className="h-3 w-3" />
+    ) : (
+      <Eye className="h-3 w-3" />
+    );
+  };
 
   const getRoleBadgeVariant = () => {
-    return isAdmin ? 'default' : 'secondary'
-  }
+    return isAdmin ? "default" : "secondary";
+  };
 
   // Show loading state while auth is being determined
   if (authLoading) {
@@ -63,12 +74,12 @@ export default function Navbar() {
           </div>
         </div>
       </nav>
-    )
+    );
   }
 
   // Don't render navbar if no user
   if (!user) {
-    return null
+    return null;
   }
 
   return (
@@ -77,32 +88,35 @@ export default function Navbar() {
         <div className="flex h-16 items-center justify-between">
           {/* Logo/Brand & Navigation */}
           <div className="flex items-center space-x-6">
-            <Link href="/" className="text-xl font-bold hover:text-primary transition-colors">
+            <Link
+              href="/"
+              className="text-xl font-bold hover:text-primary transition-colors"
+            >
               Product Manager
             </Link>
-            
+
             {/* Navigation Links */}
             <div className="hidden md:flex items-center space-x-4">
-              <Link 
-                href="/" 
+              <Link
+                href="/"
                 className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                  pathname === '/' 
-                    ? 'bg-primary text-primary-foreground' 
-                    : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                  pathname === "/"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
                 }`}
               >
                 <Home className="h-4 w-4" />
                 Products
               </Link>
-              
+
               {/* Admin-only Audit Logs link */}
               {isAdmin && (
-                <Link 
-                  href="/audit-logs" 
+                <Link
+                  href="/audit-logs"
                   className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    pathname === '/audit-logs' 
-                      ? 'bg-primary text-primary-foreground' 
-                      : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                    pathname === "/audit-logs"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-accent"
                   }`}
                 >
                   <History className="h-4 w-4" />
@@ -113,7 +127,10 @@ export default function Navbar() {
 
             {/* Role Badge */}
             {role && (
-              <Badge variant={getRoleBadgeVariant()} className="flex items-center gap-1">
+              <Badge
+                variant={getRoleBadgeVariant()}
+                className="flex items-center gap-1"
+              >
                 {getRoleIcon()}
                 {role}
               </Badge>
@@ -124,15 +141,15 @@ export default function Navbar() {
           <div className="flex items-center space-x-4">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button 
-                  variant="ghost" 
+                <Button
+                  variant="ghost"
                   className="relative h-10 w-10 rounded-full"
                   disabled={authLoading}
                 >
                   <Avatar className="h-10 w-10">
-                    <AvatarImage src="" alt={user?.email || ''} />
+                    <AvatarImage src="" alt={user?.email || ""} />
                     <AvatarFallback className="bg-primary text-primary-foreground">
-                      {user?.email ? getUserInitials(user.email) : 'U'}
+                      {user?.email ? getUserInitials(user.email) : "U"}
                     </AvatarFallback>
                   </Avatar>
                 </Button>
@@ -141,7 +158,7 @@ export default function Navbar() {
                 <DropdownMenuLabel className="font-normal">
                   <div className="flex flex-col space-y-2">
                     <p className="text-sm font-medium leading-none">
-                      {user?.email?.split('@')[0] || 'User'}
+                      {user?.email?.split("@")[0] || "User"}
                     </p>
                     <p className="text-xs leading-none text-muted-foreground">
                       {user?.email}
@@ -149,19 +166,22 @@ export default function Navbar() {
                     {/* Role display in dropdown */}
                     {role && (
                       <div className="flex items-center gap-2 pt-1">
-                        <Badge variant={getRoleBadgeVariant()} className="flex items-center gap-1 text-xs">
+                        <Badge
+                          variant={getRoleBadgeVariant()}
+                          className="flex items-center gap-1 text-xs"
+                        >
                           {getRoleIcon()}
                           {role}
                         </Badge>
                         <span className="text-xs text-muted-foreground">
-                          {isAdmin ? 'Full Access' : 'View Only'}
+                          {isAdmin ? "Full Access" : "View Only"}
                         </span>
                       </div>
                     )}
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                
+
                 {/* Navigation items for mobile */}
                 <div className="md:hidden">
                   <DropdownMenuItem asChild>
@@ -170,7 +190,7 @@ export default function Navbar() {
                       <span>Products</span>
                     </Link>
                   </DropdownMenuItem>
-                  
+
                   {isAdmin && (
                     <DropdownMenuItem asChild>
                       <Link href="/audit-logs" className="cursor-pointer">
@@ -181,7 +201,7 @@ export default function Navbar() {
                   )}
                   <DropdownMenuSeparator />
                 </div>
-                
+
                 <DropdownMenuItem className="cursor-pointer" disabled>
                   <User className="mr-2 h-4 w-4" />
                   <span>Profile</span>
@@ -197,7 +217,7 @@ export default function Navbar() {
                   ) : (
                     <LogOut className="mr-2 h-4 w-4" />
                   )}
-                  <span>{authLoading ? 'Signing out...' : 'Sign out'}</span>
+                  <span>{authLoading ? "Signing out..." : "Sign out"}</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -205,5 +225,5 @@ export default function Navbar() {
         </div>
       </div>
     </nav>
-  )
+  );
 }

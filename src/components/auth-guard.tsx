@@ -1,16 +1,16 @@
 // components/auth-guard.tsx
-'use client'
+"use client";
 
-import { Loader2 } from 'lucide-react'
-import { useAuth } from './auth-provider'
+import { Loader2 } from "lucide-react";
+import { useAuth } from "./auth-provider";
 
 interface AuthGuardProps {
-  children: React.ReactNode
-  fallback?: React.ReactNode
+  children: React.ReactNode;
+  fallback?: React.ReactNode;
 }
 
 export default function AuthGuard({ children, fallback }: AuthGuardProps) {
-  const { user, loading } = useAuth()
+  const { user, loading } = useAuth();
 
   // Show loading while checking auth or during transitions
   if (loading) {
@@ -23,7 +23,7 @@ export default function AuthGuard({ children, fallback }: AuthGuardProps) {
           </div>
         </div>
       )
-    )
+    );
   }
 
   // If user is not authenticated, show loading while redirect happens
@@ -36,9 +36,9 @@ export default function AuthGuard({ children, fallback }: AuthGuardProps) {
           <p className="text-muted-foreground">Redirecting...</p>
         </div>
       </div>
-    )
+    );
   }
 
   // User is authenticated, show protected content
-  return <>{children}</>
+  return <>{children}</>;
 }

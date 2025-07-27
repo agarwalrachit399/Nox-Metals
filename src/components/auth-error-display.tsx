@@ -1,47 +1,47 @@
 // src/components/auth-error-display.tsx
-'use client'
+"use client";
 
-import { useEffect, useState } from 'react'
-import { AlertTriangle, RefreshCw, LogOut, X } from 'lucide-react'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
-import { useAuth } from '@/components/auth-provider'
-import { AuthError, AuthErrorType } from '@/lib/auth-errors'
+import { useState } from "react";
+import { AlertTriangle, RefreshCw, LogOut, X } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/components/auth-provider";
+import { AuthError, AuthErrorType } from "@/lib/auth-errors";
 
 export default function AuthErrorDisplay() {
-  const { authError, clearAuthError, refreshSession, signOut } = useAuth()
-  const [isRefreshing, setIsRefreshing] = useState(false)
-  
-  if (!authError) return null
-  
+  const { authError, clearAuthError, refreshSession, signOut } = useAuth();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  if (!authError) return null;
+
   const handleRefresh = async () => {
-    setIsRefreshing(true)
+    setIsRefreshing(true);
     try {
-      const success = await refreshSession()
+      const success = await refreshSession();
       if (success) {
-        clearAuthError()
+        clearAuthError();
       }
     } catch (error) {
-      console.error('Manual refresh failed:', error)
+      console.error("Manual refresh failed:", error);
     } finally {
-      setIsRefreshing(false)
+      setIsRefreshing(false);
     }
-  }
-  
+  };
+
   const handleSignOut = async () => {
-    clearAuthError()
-    await signOut()
-  }
-  
+    clearAuthError();
+    await signOut();
+  };
+
   const getErrorVariant = (type: AuthErrorType) => {
     switch (type) {
       case AuthErrorType.NETWORK_ERROR:
-        return 'default'
+        return "default";
       default:
-        return 'destructive'
+        return "destructive";
     }
-  }
-  
+  };
+
   const getActionButtons = (error: AuthError) => {
     switch (error.type) {
       case AuthErrorType.NETWORK_ERROR:
@@ -57,10 +57,10 @@ export default function AuthErrorDisplay() {
             ) : (
               <RefreshCw className="h-4 w-4 mr-2" />
             )}
-            {isRefreshing ? 'Retrying...' : 'Retry'}
+            {isRefreshing ? "Retrying..." : "Retry"}
           </Button>
-        )
-        
+        );
+
       case AuthErrorType.TOKEN_EXPIRED:
       case AuthErrorType.REFRESH_FAILED:
         return (
@@ -77,34 +77,26 @@ export default function AuthErrorDisplay() {
                 ) : (
                   <RefreshCw className="h-4 w-4 mr-2" />
                 )}
-                {isRefreshing ? 'Refreshing...' : 'Refresh'}
+                {isRefreshing ? "Refreshing..." : "Refresh"}
               </Button>
             )}
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={handleSignOut}
-            >
+            <Button variant="destructive" size="sm" onClick={handleSignOut}>
               <LogOut className="h-4 w-4 mr-2" />
               Sign Out
             </Button>
           </div>
-        )
-        
+        );
+
       default:
         return (
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={handleSignOut}
-          >
+          <Button variant="destructive" size="sm" onClick={handleSignOut}>
             <LogOut className="h-4 w-4 mr-2" />
             Sign Out
           </Button>
-        )
+        );
     }
-  }
-  
+  };
+
   return (
     <div className="fixed top-4 right-4 z-50 max-w-md">
       <Alert variant={getErrorVariant(authError.type)} className="pr-12">
@@ -125,5 +117,5 @@ export default function AuthErrorDisplay() {
         </AlertDescription>
       </Alert>
     </div>
-  )
+  );
 }
