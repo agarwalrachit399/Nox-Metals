@@ -259,10 +259,8 @@ export default function HomePage() {
 
   // Reset to first page when filters change (keep existing)
   useEffect(() => {
-    if (currentPage !== 1) {
-      setCurrentPage(1);
-    }
-  }, [searchTerm, sortBy, filterCategory, showDeleted, currentPage]);
+    setCurrentPage(1);
+  }, [searchTerm, sortBy, filterCategory, showDeleted]);
 
   // Handle pagination
   const handlePrevPage = () => {
@@ -508,9 +506,9 @@ export default function HomePage() {
                   <CardHeader className="pb-3">
                     <div className="aspect-video w-full bg-muted rounded-md mb-3 overflow-hidden">
                       <Image
-                        src={product.image ?? ""}
+                        src={product.image || "/placeholder.jpeg"}
                         alt={product.name}
-                        className="w-full h-full object-cover"
+                        className="object-cover w-full h-full"
                         width={300}
                         height={200}
                       />
@@ -619,26 +617,67 @@ export default function HomePage() {
               </Button>
 
               <div className="flex items-center gap-2">
-                {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-                  const page = i + 1;
-                  if (totalPages <= 5) {
-                    return page;
+                {(() => {
+                  const pages = [];
+                  const maxVisiblePages = 5;
+
+                  if (totalPages <= maxVisiblePages) {
+                    // Show all pages if total is small
+                    for (let i = 1; i <= totalPages; i++) {
+                      pages.push(i);
+                    }
+                  } else {
+                    // Show pages around current page
+                    const startPage = Math.max(1, currentPage - 2);
+                    const endPage = Math.min(totalPages, currentPage + 2);
+
+                    // Always show first page
+                    if (startPage > 1) {
+                      pages.push(1);
+                      if (startPage > 2) {
+                        pages.push("...");
+                      }
+                    }
+
+                    // Show pages around current page
+                    for (let i = startPage; i <= endPage; i++) {
+                      pages.push(i);
+                    }
+
+                    // Always show last page
+                    if (endPage < totalPages) {
+                      if (endPage < totalPages - 1) {
+                        pages.push("...");
+                      }
+                      pages.push(totalPages);
+                    }
                   }
-                  // Show first, last, current, and adjacent pages
-                  if (currentPage <= 3) return page;
-                  if (currentPage >= totalPages - 2) return totalPages - 4 + i;
-                  return currentPage - 2 + i;
-                }).map((page) => (
-                  <Button
-                    key={page}
-                    variant={currentPage === page ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setCurrentPage(page)}
-                    className="w-10"
-                  >
-                    {page}
-                  </Button>
-                ))}
+
+                  return pages.map((page, index) => {
+                    if (page === "...") {
+                      return (
+                        <span
+                          key={`ellipsis-${index}`}
+                          className="px-2 text-muted-foreground"
+                        >
+                          ...
+                        </span>
+                      );
+                    }
+
+                    return (
+                      <Button
+                        key={page}
+                        variant={currentPage === page ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setCurrentPage(page as number)}
+                        className="w-10"
+                      >
+                        {page}
+                      </Button>
+                    );
+                  });
+                })()}
               </div>
 
               <Button
