@@ -2,6 +2,11 @@
 
 A modern, full-stack product management application built with Next.js and Supabase. Features role-based access control, real-time data management, and comprehensive audit logging.
 
+Live Website: https://nox-metals.vercel.app/login
+
+Demo Link: https://www.loom.com/share/87a6946eeec5442e82d08ef3ae165d8c?sid=b5160733-80d3-46a7-ae65-90f7cba313f1
+
+
 ## Features
 
 - **Authentication & Authorization**
