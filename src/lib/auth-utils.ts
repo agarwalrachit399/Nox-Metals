@@ -1,4 +1,3 @@
-// lib/auth-utils.ts - Simplified version
 import { NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
@@ -30,7 +29,7 @@ export const createServerSupabaseClient = async () => {
 
 // Get authenticated user
 export const getAuthenticatedUser = async (request?: NextRequest) => {
-  console.log(request);
+  void request;
   try {
     const supabase = await createServerSupabaseClient();
     const {

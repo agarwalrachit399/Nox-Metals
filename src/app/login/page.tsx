@@ -1,4 +1,3 @@
-// app/login/page.tsx
 "use client";
 
 import { useState } from "react";
@@ -15,18 +14,18 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FormErrorAlert } from "@/components/ui/error-alert";
 import { createClient } from "@/lib/auth";
+import {
+  useFormValidation,
+  validationRules,
+  combineValidators,
+} from "@/hooks/use-form-validation";
 
 interface FormData {
   email: string;
   password: string;
-}
-
-interface FormErrors {
-  email?: string;
-  password?: string;
-  submit?: string;
+  [key: string]: string;
 }
 
 export default function LoginPage() {
@@ -34,52 +33,39 @@ export default function LoginPage() {
     email: "",
     password: "",
   });
-  const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loginSuccess, setLoginSuccess] = useState(false);
+  const [submitError, setSubmitError] = useState<string>("");
+
+  const { errors, validate, clearError } = useFormValidation<FormData>({
+    email: combineValidators(
+      validationRules.required("Email"),
+      validationRules.email,
+    ),
+    password: combineValidators(
+      validationRules.required("Password"),
+      validationRules.minLength(6, "Password"),
+    ),
+  });
 
   const supabase = createClient();
 
-  const validateForm = (): boolean => {
-    const newErrors: FormErrors = {};
-
-    // Email validation
-    if (!formData.email.trim()) {
-      newErrors.email = "Email is required";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = "Please enter a valid email address";
-    }
-
-    // Password validation
-    if (!formData.password) {
-      newErrors.password = "Password is required";
-    } else if (formData.password.length < 6) {
-      newErrors.password = "Password must be at least 6 characters";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
   const handleInputChange = (field: keyof FormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-
-    // Clear error when user starts typing
-    if (errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: undefined }));
-    }
+    clearError(field);
+    if (submitError) setSubmitError("");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!validateForm()) {
+    if (!validate(formData)) {
       return;
     }
 
     setIsSubmitting(true);
-    setErrors({});
+    setSubmitError("");
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -90,17 +76,15 @@ export default function LoginPage() {
       if (error) {
         // Handle specific error types
         if (error.message.includes("Invalid login credentials")) {
-          setErrors({
-            submit:
-              "Invalid email or password. Please check your credentials and try again.",
-          });
+          setSubmitError(
+            "Invalid email or password. Please check your credentials and try again.",
+          );
         } else if (error.message.includes("Email not confirmed")) {
-          setErrors({
-            submit:
-              "Please check your email and click the confirmation link before signing in.",
-          });
+          setSubmitError(
+            "Please check your email and click the confirmation link before signing in.",
+          );
         } else {
-          setErrors({ submit: error.message });
+          setSubmitError(error.message);
         }
       } else if (data.user) {
         // Success - show success state while auth provider handles redirect
@@ -110,7 +94,7 @@ export default function LoginPage() {
       }
     } catch (error) {
       console.error("Login error:", error);
-      setErrors({ submit: "An unexpected error occurred. Please try again." });
+      setSubmitError("An unexpected error occurred. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -222,11 +206,7 @@ export default function LoginPage() {
               </div>
 
               {/* Submit Error */}
-              {errors.submit && (
-                <Alert variant="destructive">
-                  <AlertDescription>{errors.submit}</AlertDescription>
-                </Alert>
-              )}
+              {submitError && <FormErrorAlert error={submitError} />}
             </CardContent>
 
             <CardFooter className="space-y-4 flex-col mt-4">

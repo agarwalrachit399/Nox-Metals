@@ -16,12 +16,11 @@ import {
   ChevronRight,
   Plus,
   Edit,
-  Trash2,
   Loader2,
+  Trash2,
   RefreshCw,
   Eye,
   Shield,
-  AlertTriangle,
 } from "lucide-react";
 import {
   Card,
@@ -41,7 +40,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -52,18 +50,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Category,
-  type LegacyProduct,
-  transformProductFromDB,
-} from "@/lib/dummy-data";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import ProductForm from "@/components/product-form";
 import AuthGuard from "@/components/auth-guard";
 import Navbar from "@/components/navbar";
 import { useAuth } from "@/components/auth-provider";
-import { Product as DBProduct } from "@/lib/database.types";
+import { Category, Product } from "@/lib/database.types";
+import { ErrorAlert } from "@/components/ui/error-alert";
 
-type Product = LegacyProduct;
 type SortOption =
   | "name-asc"
   | "name-desc"
@@ -72,7 +66,7 @@ type SortOption =
   | "createdAt-desc";
 
 interface ApiResponse {
-  products: DBProduct[]; // Raw database format
+  products: Product[]; // Raw database format
   pagination: {
     page: number;
     limit: number;
@@ -212,8 +206,7 @@ export default function HomePage() {
 
       const data: ApiResponse = await response.json();
 
-      const transformedProducts = data.products.map(transformProductFromDB);
-      setProducts(transformedProducts);
+      setProducts(data.products);
       setTotalPages(data.pagination.totalPages);
       setTotalProducts(data.pagination.total);
     } catch (error) {
@@ -353,16 +346,7 @@ export default function HomePage() {
         <div className="min-h-screen bg-gray-50">
           <Navbar />
           <div className="container mx-auto px-4 py-8">
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription className="flex items-center justify-between">
-                {error}
-                <Button variant="outline" size="sm" onClick={fetchProducts}>
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Retry
-                </Button>
-              </AlertDescription>
-            </Alert>
+            <ErrorAlert error={error} onRetry={fetchProducts} />
           </div>
         </div>
       </AuthGuard>
@@ -514,14 +498,7 @@ export default function HomePage() {
           </div>
 
           {/* Loading State */}
-          {isLoading && (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin" />
-              <span className="ml-2 text-muted-foreground">
-                Loading products...
-              </span>
-            </div>
-          )}
+          {isLoading && <LoadingSpinner message="Loading products..." />}
 
           {/* Products Grid */}
           {!isLoading && (
@@ -555,14 +532,14 @@ export default function HomePage() {
                       <span className="text-2xl font-bold text-primary">
                         ${product.price.toFixed(2)}
                       </span>
-                      {product.isDeleted && (
+                      {product.is_deleted && (
                         <Badge variant="destructive">Deleted</Badge>
                       )}
                     </div>
                   </CardContent>
                   <CardFooter className="pt-0 mt-auto">
                     <div className="flex gap-2 w-full">
-                      {!product.isDeleted ? (
+                      {!product.is_deleted ? (
                         <>
                           {isAdmin ? (
                             <>

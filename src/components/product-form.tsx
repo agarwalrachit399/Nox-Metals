@@ -20,11 +20,13 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Category, type LegacyProduct } from "@/lib/dummy-data";
-
-// Use LegacyProduct type for backward compatibility
-type Product = LegacyProduct;
+import { FormErrorAlert } from "@/components/ui/error-alert";
+import { Category, Product } from "@/lib/database.types";
+import {
+  useFormValidation,
+  validationRules,
+  combineValidators,
+} from "@/hooks/use-form-validation";
 
 interface ProductFormProps {
   product?: Product | null;
@@ -40,15 +42,7 @@ interface FormData {
   description: string;
   category: string;
   image: string;
-}
-
-interface FormErrors {
-  name?: string;
-  price?: string;
-  description?: string;
-  category?: string;
-  image?: string;
-  submit?: string;
+  [key: string]: string;
 }
 
 export default function ProductForm({
@@ -66,10 +60,28 @@ export default function ProductForm({
     image: "",
   });
 
-  const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
   const [isLoadingCategories, setIsLoadingCategories] = useState(false);
+  const [submitError, setSubmitError] = useState<string>("");
+
+  const { errors, validate, clearError, clearAllErrors } =
+    useFormValidation<FormData>({
+      name: combineValidators(
+        validationRules.required("Product name"),
+        validationRules.minLength(2, "Product name"),
+      ),
+      price: combineValidators(
+        validationRules.required("Price"),
+        validationRules.positiveNumber("Price"),
+      ),
+      description: combineValidators(
+        validationRules.required("Description"),
+        validationRules.minLength(10, "Description"),
+      ),
+      category: validationRules.required("Category"),
+      image: validationRules.url,
+    });
 
   // Fetch categories from API
   useEffect(() => {
@@ -131,73 +143,26 @@ export default function ProductForm({
           image: "",
         });
       }
-      setErrors({});
+      clearAllErrors();
+      setSubmitError("");
     }
-  }, [isOpen, product, mode]);
-
-  const validateForm = (): boolean => {
-    const newErrors: FormErrors = {};
-
-    if (!formData.name.trim()) {
-      newErrors.name = "Product name is required";
-    } else if (formData.name.trim().length < 2) {
-      newErrors.name = "Product name must be at least 2 characters";
-    }
-
-    if (!formData.price.trim()) {
-      newErrors.price = "Price is required";
-    } else {
-      const price = parseFloat(formData.price);
-      if (isNaN(price) || price <= 0) {
-        newErrors.price = "Price must be a positive number";
-      }
-    }
-
-    if (!formData.description.trim()) {
-      newErrors.description = "Description is required";
-    } else if (formData.description.trim().length < 10) {
-      newErrors.description = "Description must be at least 10 characters";
-    }
-
-    if (!formData.category) {
-      newErrors.category = "Category is required";
-    }
-
-    if (formData.image && !isValidUrl(formData.image)) {
-      newErrors.image = "Please enter a valid image URL";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const isValidUrl = (url: string): boolean => {
-    try {
-      new URL(url);
-      return true;
-    } catch {
-      return false;
-    }
-  };
+  }, [isOpen, product, mode, clearAllErrors]);
 
   const handleInputChange = (field: keyof FormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-
-    // Clear error when user starts typing
-    if (errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: undefined }));
-    }
+    clearError(field);
+    if (submitError) setSubmitError("");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!validateForm()) {
+    if (!validate(formData)) {
       return;
     }
 
     setIsSubmitting(true);
-    setErrors({});
+    setSubmitError("");
 
     try {
       const url =
@@ -231,10 +196,9 @@ export default function ProductForm({
         `Error ${mode === "create" ? "creating" : "updating"} product:`,
         error,
       );
-      setErrors({
-        submit:
-          error instanceof Error ? error.message : `Failed to ${mode} product`,
-      });
+      setSubmitError(
+        error instanceof Error ? error.message : `Failed to ${mode} product`,
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -350,7 +314,7 @@ export default function ProductForm({
                   className={errors.image ? "border-destructive" : ""}
                 />
               </div>
-              {formData.image && isValidUrl(formData.image) && (
+              {formData.image && !errors.image && (
                 <div className="w-12 h-12 border rounded-md overflow-hidden bg-muted flex items-center justify-center">
                   <Image
                     src={formData.image}
@@ -378,11 +342,7 @@ export default function ProductForm({
           </div>
 
           {/* Submit Error */}
-          {errors.submit && (
-            <Alert variant="destructive">
-              <AlertDescription>{errors.submit}</AlertDescription>
-            </Alert>
-          )}
+          {submitError && <FormErrorAlert error={submitError} />}
 
           {/* Action Buttons */}
           <div className="flex justify-end gap-3 pt-4">

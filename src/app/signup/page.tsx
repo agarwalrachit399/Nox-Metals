@@ -1,4 +1,3 @@
-// app/signup/page.tsx
 "use client";
 
 import { useState } from "react";
@@ -16,19 +15,19 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FormErrorAlert } from "@/components/ui/error-alert";
 import { createClient } from "@/lib/auth";
+import {
+  useFormValidation,
+  validationRules,
+  combineValidators,
+} from "@/hooks/use-form-validation";
 
 interface FormData {
   email: string;
   password: string;
   confirmPassword: string;
-}
-
-interface FormErrors {
-  email?: string;
-  password?: string;
-  confirmPassword?: string;
-  submit?: string;
+  [key: string]: string;
 }
 
 export default function SignupPage() {
@@ -37,63 +36,45 @@ export default function SignupPage() {
     password: "",
     confirmPassword: "",
   });
-  const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [signupSuccess, setSignupSuccess] = useState(false);
+  const [submitError, setSubmitError] = useState<string>("");
+
+  const { errors, validate, clearError } = useFormValidation<FormData>({
+    email: combineValidators(
+      validationRules.required("Email"),
+      validationRules.email,
+    ),
+    password: combineValidators(
+      validationRules.required("Password"),
+      validationRules.minLength(8, "Password"),
+      validationRules.passwordStrength,
+    ),
+    confirmPassword: combineValidators(
+      validationRules.required("Confirm password"),
+      validationRules.matchField(formData.password, "Passwords"),
+    ),
+  });
 
   const supabase = createClient();
 
-  const validateForm = (): boolean => {
-    const newErrors: FormErrors = {};
-
-    // Email validation
-    if (!formData.email.trim()) {
-      newErrors.email = "Email is required";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = "Please enter a valid email address";
-    }
-
-    // Password validation
-    if (!formData.password) {
-      newErrors.password = "Password is required";
-    } else if (formData.password.length < 8) {
-      newErrors.password = "Password must be at least 8 characters";
-    } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(formData.password)) {
-      newErrors.password =
-        "Password must contain at least one uppercase letter, one lowercase letter, and one number";
-    }
-
-    // Confirm password validation
-    if (!formData.confirmPassword) {
-      newErrors.confirmPassword = "Please confirm your password";
-    } else if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = "Passwords do not match";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
   const handleInputChange = (field: keyof FormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-
-    // Clear error when user starts typing
-    if (errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: undefined }));
-    }
+    clearError(field);
+    if (submitError) setSubmitError("");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!validateForm()) {
+    if (!validate(formData)) {
       return;
     }
 
     setIsSubmitting(true);
-    setErrors({});
+    setSubmitError("");
 
     try {
       const { data, error } = await supabase.auth.signUp({
@@ -107,14 +88,13 @@ export default function SignupPage() {
       if (error) {
         // Handle specific error types
         if (error.message.includes("User already registered")) {
-          setErrors({
-            submit:
-              "An account with this email already exists. Please sign in instead.",
-          });
+          setSubmitError(
+            "An account with this email already exists. Please sign in instead.",
+          );
         } else if (error.message.includes("Password should be at least")) {
-          setErrors({ password: error.message });
+          setSubmitError(error.message);
         } else {
-          setErrors({ submit: error.message });
+          setSubmitError(error.message);
         }
       } else if (data.user) {
         setSignupSuccess(true);
@@ -123,7 +103,7 @@ export default function SignupPage() {
       }
     } catch (error) {
       console.error("Signup error:", error);
-      setErrors({ submit: "An unexpected error occurred. Please try again." });
+      setSubmitError("An unexpected error occurred. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -296,11 +276,7 @@ export default function SignupPage() {
               </div>
 
               {/* Submit Error */}
-              {errors.submit && (
-                <Alert variant="destructive">
-                  <AlertDescription>{errors.submit}</AlertDescription>
-                </Alert>
-              )}
+              {submitError && <FormErrorAlert error={submitError} />}
             </CardContent>
 
             <CardFooter className="space-y-4 flex-col mt-4">

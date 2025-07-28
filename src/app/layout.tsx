@@ -1,4 +1,3 @@
-// app/layout.tsx - Simplified version
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";

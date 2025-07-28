@@ -1,8 +1,8 @@
 // components/auth-guard.tsx
 "use client";
 
-import { Loader2 } from "lucide-react";
 import { useAuth } from "./auth-provider";
+import { FullScreenLoading } from "./ui/loading-spinner";
 
 interface AuthGuardProps {
   children: React.ReactNode;
@@ -14,29 +14,12 @@ export default function AuthGuard({ children, fallback }: AuthGuardProps) {
 
   // Show loading while checking auth or during transitions
   if (loading) {
-    return (
-      fallback || (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
-          <div className="text-center">
-            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
-            <p className="text-muted-foreground">Loading...</p>
-          </div>
-        </div>
-      )
-    );
+    return fallback || <FullScreenLoading message="Loading..." />;
   }
 
   // If user is not authenticated, show loading while redirect happens
-  // (middleware should handle the redirect)
   if (!user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
-          <p className="text-muted-foreground">Redirecting...</p>
-        </div>
-      </div>
-    );
+    return <FullScreenLoading message="Redirecting..." />;
   }
 
   // User is authenticated, show protected content

@@ -8,7 +8,6 @@ import {
   ChevronLeft,
   ChevronRight,
   RefreshCw,
-  Shield,
   FileText,
   Eye,
 } from "lucide-react";
@@ -23,10 +22,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AdminOnly } from "@/components/role-guard";
 import AuthGuard from "@/components/auth-guard";
 import Navbar from "@/components/navbar";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { AccessDeniedAlert, ErrorAlert } from "@/components/ui/error-alert";
 
 interface AuditLog {
   id: number;
@@ -171,12 +171,7 @@ export default function AuditLogsPage() {
         <AdminOnly
           fallback={
             <div className="container mx-auto px-4 py-8">
-              <Alert variant="destructive">
-                <Shield className="h-4 w-4" />
-                <AlertDescription>
-                  Access denied. Only administrators can view audit logs.
-                </AlertDescription>
-              </Alert>
+              <AccessDeniedAlert message="Access denied. Only administrators can view audit logs." />
             </div>
           }
         >
@@ -203,16 +198,11 @@ export default function AuditLogsPage() {
 
             {/* Error State */}
             {error && (
-              <Alert variant="destructive" className="mb-6">
-                <Shield className="h-4 w-4" />
-                <AlertDescription className="flex items-center justify-between">
-                  {error}
-                  <Button variant="outline" size="sm" onClick={fetchAuditLogs}>
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Retry
-                  </Button>
-                </AlertDescription>
-              </Alert>
+              <ErrorAlert
+                error={error}
+                onRetry={fetchAuditLogs}
+                className="mb-6"
+              />
             )}
 
             {/* Filters */}
@@ -302,14 +292,7 @@ export default function AuditLogsPage() {
             </div>
 
             {/* Loading State */}
-            {isLoading && (
-              <div className="flex items-center justify-center py-12">
-                <RefreshCw className="h-8 w-8 animate-spin mr-2" />
-                <span className="text-muted-foreground">
-                  Loading audit logs...
-                </span>
-              </div>
-            )}
+            {isLoading && <LoadingSpinner message="Loading audit logs..." />}
 
             {/* Audit Logs List */}
             {!isLoading && !error && (

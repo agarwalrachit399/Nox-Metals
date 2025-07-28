@@ -13,8 +13,7 @@ const eslintConfig = [
   // Global ignores - these will be ignored in all configurations
   {
     ignores: [
-      "src/__test__/**/*",
-      "src/__tests__/**/*", // Also ignore if you have both naming conventions
+      "src/__tests__/**/*",
       "**/*.test.ts",
       "**/*.test.tsx",
       "**/*.spec.ts",
